@@ -8,8 +8,11 @@ import logging
 import time
 import random
 
+
 from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.common.exceptions import NoSuchElementException
+
 
 RESOURCE_WOOD = 1
 RESOURCE_FOOD = 2
@@ -23,6 +26,7 @@ class Manager(object):
     REQUEST_TIMEOUT = 20
     FIND_TIMEOUT = 5
     HOST = 'http://ts1.travian.ru'
+    RESOURCE_PAGE = HOST + '/dorf1.php'
     is_logged = False
     VILLAGE_RESOURCE_BUILDINGS = []
     VILLAGE_RESOURCE_PRODUCTION = {}
@@ -32,6 +36,7 @@ class Manager(object):
     def __init__(self, user, passwd):
         self.user = user
         self.passwd = passwd
+
         firefox_capabilities = DesiredCapabilities.FIREFOX
         firefox_capabilities['marionette'] = True
         firefox_capabilities['binary'] = '/usr/bin/firefox'
@@ -43,17 +48,17 @@ class Manager(object):
             self.driver.quit()
 
     def run(self):
-        self.login()
+        self._login()
         if not self.is_logged:
             logging.error('login error')
             return
 
         while True:
             # анализируем деревню
-            self.analyze()
+            self._analyze()
 
             # строим здания
-            self.improve_buildings()
+            self._improve_buildings()
 
             # todo застраиваем центр
             # todo нотифаим если идёт атака
@@ -65,7 +70,7 @@ class Manager(object):
             logging.info('sleep random time %f', sleep_time)
             time.sleep(sleep_time)
 
-    def login(self):
+    def _login(self):
         logging.info('login call')
         try:
             self.driver.get(self.HOST)
@@ -80,7 +85,7 @@ class Manager(object):
         except:
             logging.info('login not success')
         
-    def analyze(self):
+    def _analyze(self):
         logging.info('analyze call')
 
         # analyze resource buildings
@@ -93,41 +98,13 @@ class Manager(object):
         self._analyze_buildings_queue()
 
     def _analyze_resource_buildings(self):
-        self.driver.get(self.HOST + '/dorf1.php')
-        map_content = self.driver.find_element_by_id('rx')
-        builds = map_content.find_elements_by_tag_name('area')
-        result_builds = []
-        for b in builds:
-            b_desc = str(b.get_attribute('alt'))
-            logging.debug('analyze resource build %s', b_desc)
-            if not 'Уровень' in b_desc:
-                continue
-
-            b_id = re.findall(r'id=(\d+)', str(b.get_attribute('href')))[0]
-            b_level = re.findall(r'Уровень (\d+)', str(b_desc))[0]
-            b_type = None
-            if 'Лесопилка' in b_desc:
-                b_type = RESOURCE_WOOD
-            elif 'Ферма' in b_desc:
-                b_type = RESOURCE_FOOD
-            elif 'Железный' in b_desc:
-                b_type = RESOURCE_IRON
-            elif 'Глиняный' in b_desc:
-                b_type = RESOURCE_CLAY
-
-            result_builds.append({
-                'id': int(b_id),
-                'desc': b_desc,
-                'type': b_type,
-                'level': int(b_level),
-                'obj': b
-            })
+        result_builds = self._get_resource_buildings()
         logging.info('found %d resource buildings', len(result_builds))
         logging.debug(result_builds)
         self.VILLAGE_RESOURCE_BUILDINGS = result_builds
 
     def _analyze_resource_production(self):
-        self.driver.get(self.HOST + '/dorf1.php')
+        self.driver.get(self.RESOURCE_PAGE)
         table = self.driver.find_element_by_id('production')
         result_production = {}
         for row in table.find_elements_by_tag_name('tr')[1:]:
@@ -149,17 +126,17 @@ class Manager(object):
         self.VILLAGE_RESOURCE_PRODUCTION = result_production
 
     def _analyze_buildings_queue(self):
-        self.driver.get(self.HOST + '/dorf1.php')
+        self.driver.get(self.RESOURCE_PAGE)
         try:
             div = self.driver.find_element_by_class_name('buildingList')
             cnt = len(div.find_elements_by_class_name('buildDuration'))
-        except:
+        except NoSuchElementException:
             cnt = 0
 
         self.VILLAGE_BUILD_QUEUE_SLOTS = max(0, self.VILLAGE_BUILD_QUEUE_SLOTS_LIMIT - cnt)
         logging.info('build queue free slots %d', self.VILLAGE_BUILD_QUEUE_SLOTS)
 
-    def improve_buildings(self):
+    def _improve_buildings(self):
         logging.info('improve buildings call')
         if not self.VILLAGE_BUILD_QUEUE_SLOTS:
             logging.info('build queue is full')
@@ -177,9 +154,45 @@ class Manager(object):
         logging.info('select %s build for improve', minimal_level_build)
 
         # improve build
+        self.driver.get(minimal_level_build['href'])
+        div = self.driver.find_element_by_id('build')
+        try:
+            button = div.find_element_by_xpath('.//button[@class="green build"]')
+            button.click()
+            logging.info('upgrade building')
+        except NoSuchElementException:
+            logging.info('upgrade button not available')
 
-    
-
+    def _get_resource_buildings(self):
+        self.driver.get(self.RESOURCE_PAGE)
+        map_content = self.driver.find_element_by_id('rx')
+        builds = map_content.find_elements_by_tag_name('area')
+        result_builds = []
+        for b in builds:
+            b_desc = str(b.get_attribute('alt'))
+            logging.debug('analyze resource build %s', b_desc)
+            if not 'Уровень' in b_desc:
+                continue
+            b_href = str(b.get_attribute('href'))
+            b_id = re.findall(r'id=(\d+)', b_href)[0]
+            b_level = re.findall(r'Уровень (\d+)', str(b_desc))[0]
+            b_type = None
+            if 'Лесопилка' in b_desc:
+                b_type = RESOURCE_WOOD
+            elif 'Ферма' in b_desc:
+                b_type = RESOURCE_FOOD
+            elif 'Железный' in b_desc:
+                b_type = RESOURCE_IRON
+            elif 'Глиняный' in b_desc:
+                b_type = RESOURCE_CLAY
+            result_builds.append({
+                'id': int(b_id),
+                'desc': b_desc,
+                'type': b_type,
+                'level': int(b_level),
+                'href': b_href
+            })
+        return result_builds
 
 
 if __name__ == '__main__':
