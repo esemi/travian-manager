@@ -1,9 +1,12 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import operator
 import sys
 import re
 import logging
+import time
+import random
 
 from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
@@ -16,7 +19,9 @@ RESOURCE_CLAY = 4
 
 class Manager(object):
 
-    TIMEOUT = 20
+    RUN_TIMEOUT = 5 * 60
+    REQUEST_TIMEOUT = 20
+    FIND_TIMEOUT = 5
     HOST = 'http://ts1.travian.ru'
     is_logged = False
     VILLAGE_RESOURCE_BUILDINGS = []
@@ -30,8 +35,8 @@ class Manager(object):
         firefox_capabilities = DesiredCapabilities.FIREFOX
         firefox_capabilities['marionette'] = True
         firefox_capabilities['binary'] = '/usr/bin/firefox'
-        self.driver = webdriver.Firefox(capabilities=firefox_capabilities, timeout=self.TIMEOUT)
-        self.driver.implicitly_wait(self.TIMEOUT)
+        self.driver = webdriver.Firefox(capabilities=firefox_capabilities, timeout=self.REQUEST_TIMEOUT)
+        self.driver.implicitly_wait(self.FIND_TIMEOUT)
 
     def close(self):
         if self.driver:
@@ -47,16 +52,18 @@ class Manager(object):
             # анализируем деревню
             self.analyze()
 
-            # есть пара зданий на улучшение
-            # если есть свободные ресурсы и место в очереди
-                # развиваем деревню (ресурсы и центр)
+            # строим здания
+            self.improve_buildings()
 
+            # todo застраиваем центр
             # todo нотифаим если идёт атака
             # todo отправляем героя в приключения
             # todo прокачиваем героя
             # todo выполняем задания и забираем награды за них
-            # todo sleep
-            return
+
+            sleep_time = self.RUN_TIMEOUT * 2 * random.random()
+            logging.info('sleep random time %f', sleep_time)
+            time.sleep(sleep_time)
 
     def login(self):
         logging.info('login call')
@@ -91,12 +98,13 @@ class Manager(object):
         builds = map_content.find_elements_by_tag_name('area')
         result_builds = []
         for b in builds:
-            b_desc = b.get_attribute('alt')
+            b_desc = str(b.get_attribute('alt'))
             logging.debug('analyze resource build %s', b_desc)
             if not 'Уровень' in b_desc:
                 continue
 
             b_id = re.findall(r'id=(\d+)', str(b.get_attribute('href')))[0]
+            b_level = re.findall(r'Уровень (\d+)', str(b_desc))[0]
             b_type = None
             if 'Лесопилка' in b_desc:
                 b_type = RESOURCE_WOOD
@@ -108,9 +116,11 @@ class Manager(object):
                 b_type = RESOURCE_CLAY
 
             result_builds.append({
-                'id': b_id,
+                'id': int(b_id),
                 'desc': b_desc,
-                'type': b_type
+                'type': b_type,
+                'level': int(b_level),
+                'obj': b
             })
         logging.info('found %d resource buildings', len(result_builds))
         logging.debug(result_builds)
@@ -139,13 +149,37 @@ class Manager(object):
         self.VILLAGE_RESOURCE_PRODUCTION = result_production
 
     def _analyze_buildings_queue(self):
-        cnt = 0
         self.driver.get(self.HOST + '/dorf1.php')
-        div = self.driver.find_element_by_class_name('buildingList')
-        if div:
+        try:
+            div = self.driver.find_element_by_class_name('buildingList')
             cnt = len(div.find_elements_by_class_name('buildDuration'))
+        except:
+            cnt = 0
+
         self.VILLAGE_BUILD_QUEUE_SLOTS = max(0, self.VILLAGE_BUILD_QUEUE_SLOTS_LIMIT - cnt)
         logging.info('build queue free slots %d', self.VILLAGE_BUILD_QUEUE_SLOTS)
+
+    def improve_buildings(self):
+        logging.info('improve buildings call')
+        if not self.VILLAGE_BUILD_QUEUE_SLOTS:
+            logging.info('build queue is full')
+            return
+
+        # select minimal production resource type
+        minimal_production_type = sorted(self.VILLAGE_RESOURCE_PRODUCTION.items(),
+                                         key=operator.itemgetter(1))[0][0]
+        logging.info('select %d type of resource for improve production', minimal_production_type)
+
+        # select minimal level resource build
+        minimal_level_build = sorted([i for i in self.VILLAGE_RESOURCE_BUILDINGS
+                                      if i['type'] == minimal_production_type],
+                                     key=lambda x: x['level'])[0]
+        logging.info('select %s build for improve', minimal_level_build)
+
+        # improve build
+
+    
+
 
 
 if __name__ == '__main__':
