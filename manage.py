@@ -379,14 +379,22 @@ class Manager(object):
         for b in div.find_elements_by_class_name('buildingWrapper'):
             try:
                 title = str(b.find_element_by_tag_name('h2').text).strip()
-                button = b.find_element_by_class_name('green new')
             except NoSuchElementException:
                 continue
 
-            if title == prop['pattern'] and str(button.text) == 'Построить':
+            if title != prop['pattern']:
+                continue
+
+            logging.debug('found build block')
+            try:
+                button = b.find_element_by_xpath('.//button[@class="green new" and @value="Построить"]')
+                logging.debug('found build button')
                 button.click()
                 logging.info('create complete')
                 return
+            except NoSuchElementException:
+                pass
+
         logging.info('create incomplete')
 
 
