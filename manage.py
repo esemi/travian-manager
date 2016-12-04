@@ -27,11 +27,18 @@ class Manager(object):
     FIND_TIMEOUT = 5
     HOST = 'http://ts1.travian.ru'
     RESOURCE_PAGE = HOST + '/dorf1.php'
+    HERO_PAGE = HOST + '/hero.php'
+    HERO_ADVENTURE_PAGE = HOST + '/hero.php?t=3'
+
     is_logged = False
+
     VILLAGE_RESOURCE_BUILDINGS = []
     VILLAGE_RESOURCE_PRODUCTION = {}
     VILLAGE_BUILD_QUEUE_SLOTS = 0
     VILLAGE_BUILD_QUEUE_SLOTS_LIMIT = 1
+
+    HERO_HP_PERCENT = 0
+    HERO_HP_PERCENT_THRESHOLD = 90
 
     def __init__(self, user, passwd):
         self.user = user
@@ -60,11 +67,15 @@ class Manager(object):
             # строим здания
             self._improve_buildings()
 
+            # отправляем героя в приключения
+            self._send_hero_to_adventures()
+
             # todo застраиваем центр
             # todo нотифаим если идёт атака
-            # todo отправляем героя в приключения
             # todo прокачиваем героя
             # todo выполняем задания и забираем награды за них
+            # todo separate action log
+            # todo screenshots for timelapse
 
             sleep_time = self.RUN_TIMEOUT * 2 * random.random()
             logging.info('sleep random time %f', sleep_time)
@@ -79,9 +90,9 @@ class Manager(object):
             login_form.find_element_by_name('password').send_keys(self.passwd)
             login_form.submit()
 
-            village_map_element = self.driver.find_element_by_id('village_map')
+            self.driver.find_element_by_id('village_map')
             self.is_logged = True
-            logging.info('login success %s' % village_map_element)
+            logging.info('login success')
         except:
             logging.info('login not success')
         
@@ -96,6 +107,9 @@ class Manager(object):
 
         # analyze buildings queue
         self._analyze_buildings_queue()
+
+        # analyze hero
+        self._analyze_hero()
 
     def _analyze_resource_buildings(self):
         result_builds = self._get_resource_buildings()
@@ -136,6 +150,15 @@ class Manager(object):
         self.VILLAGE_BUILD_QUEUE_SLOTS = max(0, self.VILLAGE_BUILD_QUEUE_SLOTS_LIMIT - cnt)
         logging.info('build queue free slots %d', self.VILLAGE_BUILD_QUEUE_SLOTS)
 
+    def _analyze_hero(self):
+        self.driver.get(self.HERO_PAGE)
+        status_div = self.driver.find_element_by_id('attributes')
+        value = status_div.find_element_by_class_name('health')\
+            .find_element_by_xpath('.//td[contains(@class, "current")]').text.strip()
+        value = int(re.findall(r'(\d+)', str(value))[0])
+        self.HERO_HP_PERCENT = max(100, value)
+        logging.info('hero HP percent %d', self.HERO_HP_PERCENT)
+
     def _improve_buildings(self):
         logging.info('improve buildings call')
         if not self.VILLAGE_BUILD_QUEUE_SLOTS:
@@ -162,6 +185,21 @@ class Manager(object):
             logging.info('upgrade building')
         except NoSuchElementException:
             logging.info('upgrade button not available')
+
+    def _send_hero_to_adventures(self):
+        logging.info('send hero to adventure call')
+        if not self.HERO_HP_PERCENT > self.HERO_HP_PERCENT_THRESHOLD:
+            logging.info('hero hp is smaller than threshold %s', self.HERO_HP_PERCENT)
+            return
+
+        self.driver.get(self.HERO_ADVENTURE_PAGE)
+        adventure_list = self.driver.find_element_by_id('adventureListForm')
+        links = adventure_list.find_elements_by_xpath('.//a[@class="gotoAdventure arrow"]')
+        logging.info('find %d available adventures', len(links))
+
+        if links:
+            links[0].click()
+            logging.info('send to adventure success')
 
     def _get_resource_buildings(self):
         self.driver.get(self.RESOURCE_PAGE)
@@ -209,6 +247,7 @@ if __name__ == '__main__':
             m.run()
         except Exception as e:
             logging.error('exception %s', e)
+            # todo save screenshot
         finally:
             m.close()
 
