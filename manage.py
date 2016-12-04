@@ -18,6 +18,7 @@ RESOURCE_WOOD = 1
 RESOURCE_FOOD = 2
 RESOURCE_IRON = 3
 RESOURCE_CLAY = 4
+RESOURCE_FOOD_FREE = 5
 
 
 class Manager(object):
@@ -34,11 +35,14 @@ class Manager(object):
 
     VILLAGE_RESOURCE_BUILDINGS = []
     VILLAGE_RESOURCE_PRODUCTION = {}
+    VILLAGE_RESOURCE_STOCK = {}
     VILLAGE_BUILD_QUEUE_SLOTS = 0
     VILLAGE_BUILD_QUEUE_SLOTS_LIMIT = 1
 
     HERO_HP_PERCENT = 0
     HERO_HP_PERCENT_THRESHOLD = 90
+
+    RESOURCE_FOOD_FREE_THRESHOLD = 5
 
     def __init__(self, user, passwd):
         self.user = user
@@ -105,6 +109,9 @@ class Manager(object):
         # analyze resource input
         self._analyze_resource_production()
 
+        # analyze resource stock
+        self._analyze_resource_stock()
+
         # analyze buildings queue
         self._analyze_buildings_queue()
 
@@ -139,6 +146,29 @@ class Manager(object):
         logging.info('resource production %s', result_production)
         self.VILLAGE_RESOURCE_PRODUCTION = result_production
 
+    def _analyze_resource_stock(self):
+        self.driver.get(self.RESOURCE_PAGE)
+        stock_list = self.driver.find_element_by_id('stockBar')
+        result_stock = {}
+        for row in stock_list.find_elements_by_xpath('.//li[contains(@class, "stockBarButton")]'):
+            title = str(row.find_element_by_tag_name('img').get_attribute('alt')).strip()
+            value = str(row.find_element_by_xpath('.//span[@class="value"]').text).strip()
+            value = int(re.findall(r'(\d+)', value)[0])
+            logging.debug('stock %s %d', title, value)
+            if 'Глина' in title:
+                type = RESOURCE_CLAY
+            elif 'Зерно' in title:
+                type = RESOURCE_FOOD
+            elif 'Древесина' in title:
+                type = RESOURCE_WOOD
+            elif 'Железо' in title:
+                type = RESOURCE_IRON
+            else:
+                type = RESOURCE_FOOD_FREE
+            result_stock[type] = value
+        logging.info('resource stock %s', result_stock)
+        self.VILLAGE_RESOURCE_STOCK = result_stock
+
     def _analyze_buildings_queue(self):
         self.driver.get(self.RESOURCE_PAGE)
         try:
@@ -165,9 +195,14 @@ class Manager(object):
             logging.info('build queue is full')
             return
 
+        # improve food resource only if free value is lower
+        improve_resource_types = self.VILLAGE_RESOURCE_PRODUCTION.items()
+        if self.VILLAGE_RESOURCE_STOCK[RESOURCE_FOOD_FREE] > self.RESOURCE_FOOD_FREE_THRESHOLD:
+            logging.info('ignore food resource by free value %d', self.VILLAGE_RESOURCE_STOCK[RESOURCE_FOOD_FREE])
+            improve_resource_types = [i for i in improve_resource_types if i[0] != RESOURCE_FOOD]
+
         # select minimal production resource type
-        minimal_production_type = sorted(self.VILLAGE_RESOURCE_PRODUCTION.items(),
-                                         key=operator.itemgetter(1))[0][0]
+        minimal_production_type = sorted(improve_resource_types, key=operator.itemgetter(1))[0][0]
         logging.info('select %d type of resource for improve production', minimal_production_type)
 
         # select minimal level resource build
