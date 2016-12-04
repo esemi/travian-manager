@@ -20,6 +20,14 @@ RESOURCE_IRON = 3
 RESOURCE_CLAY = 4
 RESOURCE_FOOD_FREE = 5
 
+BUILD_FREE = 10
+BUILD_HEADQUARTERS = 11
+BUILD_BASE = 12
+
+CREATE_BUILD_CAT = {
+    BUILD_HEADQUARTERS: {'cat': 2, 'pattern': 'Пункт сбора'}
+}
+
 
 class Manager(object):
 
@@ -27,12 +35,14 @@ class Manager(object):
     REQUEST_TIMEOUT = 20
     FIND_TIMEOUT = 5
     HOST = 'http://ts1.travian.ru'
-    RESOURCE_PAGE = HOST + '/dorf1.php'
+    MAIN_PAGE = HOST + '/dorf1.php'
+    VILLAGE_PAGE = HOST + '/dorf2.php'
     HERO_PAGE = HOST + '/hero.php'
     HERO_ADVENTURE_PAGE = HOST + '/hero.php?t=3'
 
     is_logged = False
 
+    VILLAGE_BUILDINGS = []
     VILLAGE_RESOURCE_BUILDINGS = []
     VILLAGE_RESOURCE_PRODUCTION = {}
     VILLAGE_RESOURCE_STOCK = {}
@@ -43,6 +53,11 @@ class Manager(object):
     HERO_HP_PERCENT_THRESHOLD = 90
 
     RESOURCE_FOOD_FREE_THRESHOLD = 5
+
+    VILLAGE_BUILDINGS_ETALON = {
+        BUILD_HEADQUARTERS: 1,
+        BUILD_BASE: 3,
+    }
 
     def __init__(self, user, passwd):
         self.user = user
@@ -74,12 +89,13 @@ class Manager(object):
             # отправляем героя в приключения
             self._send_hero_to_adventures()
 
-            # todo застраиваем центр
             # todo нотифаим если идёт атака
             # todo прокачиваем героя
             # todo выполняем задания и забираем награды за них
             # todo separate action log
             # todo screenshots for timelapse
+
+            self.driver.get(self.MAIN_PAGE)
 
             sleep_time = self.RUN_TIMEOUT * 2 * random.random()
             logging.info('sleep random time %f', sleep_time)
@@ -105,6 +121,9 @@ class Manager(object):
 
         # analyze resource buildings
         self._analyze_resource_buildings()
+
+        # analyze village buildings
+        self._analyze_village_buildings()
         
         # analyze resource input
         self._analyze_resource_production()
@@ -124,8 +143,14 @@ class Manager(object):
         logging.debug(result_builds)
         self.VILLAGE_RESOURCE_BUILDINGS = result_builds
 
+    def _analyze_village_buildings(self):
+        result_builds = self._get_village_buildings()
+        logging.info('found %d village buildings', len(result_builds))
+        logging.debug(result_builds)
+        self.VILLAGE_BUILDINGS = result_builds
+
     def _analyze_resource_production(self):
-        self.driver.get(self.RESOURCE_PAGE)
+        self.driver.get(self.MAIN_PAGE)
         table = self.driver.find_element_by_id('production')
         result_production = {}
         for row in table.find_elements_by_tag_name('tr')[1:]:
@@ -147,7 +172,7 @@ class Manager(object):
         self.VILLAGE_RESOURCE_PRODUCTION = result_production
 
     def _analyze_resource_stock(self):
-        self.driver.get(self.RESOURCE_PAGE)
+        self.driver.get(self.MAIN_PAGE)
         stock_list = self.driver.find_element_by_id('stockBar')
         result_stock = {}
         for row in stock_list.find_elements_by_xpath('.//li[contains(@class, "stockBarButton")]'):
@@ -170,7 +195,7 @@ class Manager(object):
         self.VILLAGE_RESOURCE_STOCK = result_stock
 
     def _analyze_buildings_queue(self):
-        self.driver.get(self.RESOURCE_PAGE)
+        self.driver.get(self.MAIN_PAGE)
         try:
             div = self.driver.find_element_by_class_name('buildingList')
             cnt = len(div.find_elements_by_class_name('buildDuration'))
@@ -195,16 +220,22 @@ class Manager(object):
             logging.info('build queue is full')
             return
 
-        # improve food resource only if free value is lower
+        need_accumulate_resource = self._improve_village_center()
+
+        if not need_accumulate_resource:
+            self._improve_village_production()
+
+    def _improve_village_production(self):
+        self.driver.get(self.MAIN_PAGE)
         improve_resource_types = self.VILLAGE_RESOURCE_PRODUCTION.items()
-        if self.VILLAGE_RESOURCE_STOCK[RESOURCE_FOOD_FREE] > self.RESOURCE_FOOD_FREE_THRESHOLD:
+        if self.VILLAGE_RESOURCE_STOCK[RESOURCE_FOOD_FREE] > self.RESOURCE_FOOD_FREE_THRESHOLD and \
+                self.VILLAGE_RESOURCE_PRODUCTION[RESOURCE_FOOD] > 0:
             logging.info('ignore food resource by free value %d', self.VILLAGE_RESOURCE_STOCK[RESOURCE_FOOD_FREE])
             improve_resource_types = [i for i in improve_resource_types if i[0] != RESOURCE_FOOD]
 
         # select minimal production resource type
         minimal_production_type = sorted(improve_resource_types, key=operator.itemgetter(1))[0][0]
         logging.info('select %d type of resource for improve production', minimal_production_type)
-
         # select minimal level resource build
         minimal_level_build = sorted([i for i in self.VILLAGE_RESOURCE_BUILDINGS
                                       if i['type'] == minimal_production_type],
@@ -212,14 +243,31 @@ class Manager(object):
         logging.info('select %s build for improve', minimal_level_build)
 
         # improve build
-        self.driver.get(minimal_level_build['href'])
-        div = self.driver.find_element_by_id('build')
-        try:
-            button = div.find_element_by_xpath('.//button[@class="green build"]')
-            button.click()
-            logging.info('upgrade building')
-        except NoSuchElementException:
-            logging.info('upgrade button not available')
+        self._upgrade_build(minimal_level_build['href'])
+
+    def _improve_village_center(self):
+        self.driver.get(self.VILLAGE_PAGE)
+        upgrade_queue = []
+        create_queue = []
+        for (b_type, b_level) in self.VILLAGE_BUILDINGS_ETALON.items():
+            build_exist = [i for i in self.VILLAGE_BUILDINGS if i['type'] == b_type]
+            if build_exist:
+                if build_exist[0]['level'] < b_level:
+                    upgrade_queue.append((b_type, b_level, build_exist[0]['href']))
+            else:
+                create_queue.append((b_type, b_level))
+        logging.info('found %d builds for upgrade %s', len(upgrade_queue), upgrade_queue)
+        logging.info('found %d builds for create %s', len(create_queue), create_queue)
+
+        for b in create_queue:
+            logging.info('center build create %s', b)
+            self._create_build(b[0])
+
+        for b in upgrade_queue:
+            logging.info('center build upgrade %s', b)
+            self._upgrade_build(b[2])
+
+        return len(create_queue)
 
     def _send_hero_to_adventures(self):
         logging.info('send hero to adventure call')
@@ -234,10 +282,11 @@ class Manager(object):
 
         if links:
             links[0].click()
+            # todo confirm
             logging.info('send to adventure success')
 
     def _get_resource_buildings(self):
-        self.driver.get(self.RESOURCE_PAGE)
+        self.driver.get(self.MAIN_PAGE)
         map_content = self.driver.find_element_by_id('rx')
         builds = map_content.find_elements_by_tag_name('area')
         result_builds = []
@@ -266,6 +315,79 @@ class Manager(object):
                 'href': b_href
             })
         return result_builds
+
+    def _get_village_buildings(self):
+        self.driver.get(self.VILLAGE_PAGE)
+        map_content = self.driver.find_element_by_id('village_map')
+        builds = map_content.find_elements_by_tag_name('area')
+        result_builds = []
+        for b in builds:
+            b_desc = str(b.get_attribute('alt'))
+            logging.debug('analyze build %s', b_desc)
+            b_href = str(b.get_attribute('href'))
+            b_id = re.findall(r'id=(\d+)', b_href)[0]
+            try:
+                b_level = re.findall(r'Уровень (\d+)', str(b_desc))[0]
+            except IndexError:
+                b_level = 0
+
+            if 'Стройплощадка' in b_desc:
+                b_type = BUILD_FREE
+            elif 'Пункт сбора' in b_desc:
+                b_type = BUILD_HEADQUARTERS
+            elif 'Главное здание' in b_desc:
+                b_type = BUILD_BASE
+            else:
+                logging.debug('miss not interested build')
+                continue
+
+            result_builds.append({
+                'id': int(b_id),
+                'type': b_type,
+                'level': int(b_level),
+                'href': b_href
+            })
+        return result_builds
+
+    def _upgrade_build(self, link):
+        logging.info('upgrade build %s', link)
+        self.driver.get(link)
+        div = self.driver.find_element_by_id('build')
+        try:
+            button = div.find_element_by_xpath('.//button[@class="green build"]')
+            button.click()
+            logging.info('upgrade complete')
+        except NoSuchElementException:
+            logging.info('upgrade not available')
+
+    def _create_build(self, b_type):
+        logging.info('create build %s', b_type)
+        free_slots = [i for i in self.VILLAGE_BUILDINGS if i['type'] == BUILD_FREE]
+        if not free_slots:
+            logging.warning('not found free slots')
+            return
+
+        try:
+            prop = CREATE_BUILD_CAT[b_type]
+            logging.info('build property %s', prop)
+        except KeyError:
+            logging.error('build cat not found %s', b_type)
+            return
+
+        self.driver.get(free_slots[0]['href'] + '&category=%d' % prop['cat'])
+        div = self.driver.find_element_by_id('build')
+        for b in div.find_elements_by_class_name('buildingWrapper'):
+            try:
+                title = str(b.find_element_by_tag_name('h2').text).strip()
+                button = b.find_element_by_class_name('green new')
+            except NoSuchElementException:
+                continue
+
+            if title == prop['pattern'] and str(button.text) == 'Построить':
+                button.click()
+                logging.info('create complete')
+                return
+        logging.info('create incomplete')
 
 
 if __name__ == '__main__':
