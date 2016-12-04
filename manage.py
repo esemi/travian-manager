@@ -23,9 +23,17 @@ RESOURCE_FOOD_FREE = 5
 BUILD_FREE = 10
 BUILD_HEADQUARTERS = 11
 BUILD_BASE = 12
+BUILD_STOCK = 13
+BUILD_GRANARY = 14
+BUILD_CACHE = 15
+BUILD_BARRACKS = 16
 
 CREATE_BUILD_CAT = {
-    BUILD_HEADQUARTERS: {'cat': 2, 'pattern': 'Пункт сбора'}
+    BUILD_HEADQUARTERS: {'cat': 2, 'pattern': 'Пункт сбора'},
+    BUILD_STOCK: {'cat': 1, 'pattern': 'Склад'},
+    BUILD_GRANARY: {'cat': 1, 'pattern': 'Амбар'},
+    BUILD_CACHE: {'cat': 1, 'pattern': 'Тайник'},
+    BUILD_BARRACKS: {'cat': 2, 'pattern': 'Казарма'},
 }
 
 
@@ -57,6 +65,10 @@ class Manager(object):
     VILLAGE_BUILDINGS_ETALON = {
         BUILD_HEADQUARTERS: 1,
         BUILD_BASE: 3,
+        BUILD_STOCK: 2,
+        BUILD_GRANARY: 2,
+        BUILD_BARRACKS: 1,
+        BUILD_CACHE: 1,
     }
 
     def __init__(self, user, passwd):
@@ -220,10 +232,12 @@ class Manager(object):
             logging.info('build queue is full')
             return
 
-        need_accumulate_resource = self._improve_village_center()
-
-        if not need_accumulate_resource:
+        if random.random() > 0.4:
+            self._improve_village_center()
             self._improve_village_production()
+        else:
+            self._improve_village_production()
+            self._improve_village_center()
 
     def _improve_village_production(self):
         self.driver.get(self.MAIN_PAGE)
@@ -282,8 +296,15 @@ class Manager(object):
 
         if links:
             links[0].click()
-            # todo confirm
-            logging.info('send to adventure success')
+
+            try:
+                adventure_send_button = self.driver.find_element_by_xpath('//form[@class="adventureSendButton"]'
+                                                                          '//button[contains(@class, "green")]')
+                time.sleep(5)
+                adventure_send_button.click()
+                logging.info('send to adventure success')
+            except NoSuchElementException:
+                logging.info('send to adventure not available')
 
     def _get_resource_buildings(self):
         self.driver.get(self.MAIN_PAGE)
@@ -335,6 +356,14 @@ class Manager(object):
                 b_type = BUILD_FREE
             elif 'Пункт сбора' in b_desc:
                 b_type = BUILD_HEADQUARTERS
+            elif 'Казарма' in b_desc:
+                b_type = BUILD_BARRACKS
+            elif 'Тайник' in b_desc:
+                b_type = BUILD_CACHE
+            elif 'Амбар' in b_desc:
+                b_type = BUILD_GRANARY
+            elif 'Склад' in b_desc:
+                b_type = BUILD_STOCK
             elif 'Главное здание' in b_desc:
                 b_type = BUILD_BASE
             else:
@@ -369,7 +398,7 @@ class Manager(object):
 
         try:
             prop = CREATE_BUILD_CAT[b_type]
-            logging.info('build property %s', prop)
+            logging.debug('build property %s', prop)
         except KeyError:
             logging.error('build cat not found %s', b_type)
             return
