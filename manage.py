@@ -28,11 +28,15 @@ BUILD_GRANARY = 14
 BUILD_CACHE = 15
 BUILD_BARRACKS = 16
 
-CREATE_BUILD_CAT = {
-    BUILD_HEADQUARTERS: {'cat': 2, 'pattern': 'Пункт сбора'},
+BUILDINGS = {
+    BUILD_FREE: {'pattern': 'Стройплощадка'},
+
+    BUILD_BASE: {'cat': 1, 'pattern': 'Главное здание'},
     BUILD_STOCK: {'cat': 1, 'pattern': 'Склад'},
     BUILD_GRANARY: {'cat': 1, 'pattern': 'Амбар'},
     BUILD_CACHE: {'cat': 1, 'pattern': 'Тайник'},
+
+    BUILD_HEADQUARTERS: {'cat': 2, 'pattern': 'Пункт сбора'},
     BUILD_BARRACKS: {'cat': 2, 'pattern': 'Казарма'},
 }
 
@@ -97,7 +101,7 @@ class Manager(object):
             # анализируем деревню
             self._analyze()
 
-            # строим здания
+            # развитие деревни и полей
             self._improve_buildings()
 
             # отправляем героя в приключения
@@ -106,10 +110,10 @@ class Manager(object):
             # забираем награды за квесты
             self._quest_complete()
 
+            # todo лимит развития ресурсовой карты
+            # todo строим войска
             # todo забираем награды за дейлики
-            # todo карта зданий ресурсов
-            # todo выполняем задания
-            # todo точная карта раскачки деревни ?
+            # todo выполняем задания = точная карта раскачки деревни ?
             # todo нотифаим если идёт атака
             # todo прокачиваем героя
 
@@ -138,7 +142,7 @@ class Manager(object):
         # ранние квесты
         def _process_early_quest():
             try:
-                complete_button = self.driver.find_element_by_xpath('//button[@questbuttongainreward="1"]')
+                complete_button = self.driver.find_element_by_xpath('//button[@questbuttonnext="1"]')
                 complete_button.click()
                 logging.info('complete early quest')
             except NoSuchElementException:
@@ -164,7 +168,7 @@ class Manager(object):
         try:
             quest_list = self.driver.find_element_by_id('questTodoListDialog')
         except NoSuchElementException:
-            logging.info('not found todo tasks list - process early quest')
+            logging.info('early quest process')
             _process_early_quest()
         else:
             logging.info('late quest process')
@@ -409,21 +413,14 @@ class Manager(object):
             except IndexError:
                 b_level = 0
 
-            if 'Стройплощадка' in b_desc:
-                b_type = BUILD_FREE
-            elif 'Пункт сбора' in b_desc:
-                b_type = BUILD_HEADQUARTERS
-            elif 'Казарма' in b_desc:
-                b_type = BUILD_BARRACKS
-            elif 'Тайник' in b_desc:
-                b_type = BUILD_CACHE
-            elif 'Амбар' in b_desc:
-                b_type = BUILD_GRANARY
-            elif 'Склад' in b_desc:
-                b_type = BUILD_STOCK
-            elif 'Главное здание' in b_desc:
-                b_type = BUILD_BASE
-            else:
+            def _get_build_type(desc):
+                for t, item in BUILDINGS.items():
+                    if item['pattern'] in desc:
+                        return t
+                return None
+
+            b_type = _get_build_type(b_desc)
+            if b_type is None:
                 logging.debug('miss not interested build')
                 continue
 
@@ -454,7 +451,7 @@ class Manager(object):
             return
 
         try:
-            prop = CREATE_BUILD_CAT[b_type]
+            prop = BUILDINGS[b_type]
             logging.debug('build property %s', prop)
         except KeyError:
             logging.error('build cat not found %s', b_type)
