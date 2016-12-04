@@ -39,7 +39,7 @@ CREATE_BUILD_CAT = {
 
 class Manager(object):
 
-    RUN_TIMEOUT = 5 * 60
+    RUN_TIMEOUT = 10 * 60
     REQUEST_TIMEOUT = 20
     FIND_TIMEOUT = 5
     HOST = 'http://ts1.travian.ru'
@@ -92,6 +92,8 @@ class Manager(object):
             return
 
         while True:
+            self._sanitizing()
+
             # анализируем деревню
             self._analyze()
 
@@ -101,17 +103,72 @@ class Manager(object):
             # отправляем героя в приключения
             self._send_hero_to_adventures()
 
+            # забираем награды за квесты
+            self._quest_complete()
+
+            # todo забираем награды за дейлики
+            # todo карта зданий ресурсов
+            # todo выполняем задания
+            # todo точная карта раскачки деревни ?
             # todo нотифаим если идёт атака
             # todo прокачиваем героя
-            # todo выполняем задания и забираем награды за них
+
             # todo separate action log
             # todo screenshots for timelapse
 
-            self.driver.get(self.MAIN_PAGE)
-
-            sleep_time = self.RUN_TIMEOUT * 2 * random.random()
+            sleep_time = self.RUN_TIMEOUT + self.RUN_TIMEOUT * random.random()
             logging.info('sleep random time %f', sleep_time)
             time.sleep(sleep_time)
+
+    def _sanitizing(self):
+        for close in self.driver.find_elements_by_id('dialogCancelButton'):
+            close.click()
+        self.driver.get(self.MAIN_PAGE)
+        for close in self.driver.find_elements_by_id('dialogCancelButton'):
+            close.click()
+
+    def _quest_complete(self):
+        logging.info('complete quest call')
+        self.driver.get(self.MAIN_PAGE)
+
+        # open quest dialog
+        quest_master = self.driver.find_element_by_id('questmasterButton')
+        quest_master.click()
+
+        # ранние квесты
+        def _process_early_quest():
+            try:
+                complete_button = self.driver.find_element_by_xpath('//button[@questbuttongainreward="1"]')
+                complete_button.click()
+                logging.info('complete early quest')
+            except NoSuchElementException:
+                return
+
+        # поздние квесты
+        def _process_late_quest(quest_list):
+            for q in quest_list.find_elements_by_xpath('.//li[@class="questName"]'):
+                try:
+                    complete_flag = q.find_element_by_xpath('.//img[@class="reward"]')
+                except NoSuchElementException:
+                    continue
+
+                link = q.find_element_by_tag_name('a')
+                logging.debug('found quest for complete %s', str(link.text))
+                link.click()
+
+                complete_button = self.driver.find_element_by_xpath('//button[@questbuttongainreward="1"]')
+                complete_button.click()
+                logging.info('complete late quest')
+                break
+
+        try:
+            quest_list = self.driver.find_element_by_id('questTodoListDialog')
+        except NoSuchElementException:
+            logging.info('not found todo tasks list - process early quest')
+            _process_early_quest()
+        else:
+            logging.info('late quest process')
+            _process_late_quest(quest_list)
 
     def _login(self):
         logging.info('login call')
@@ -232,12 +289,12 @@ class Manager(object):
             logging.info('build queue is full')
             return
 
-        if random.random() > 0.4:
-            self._improve_village_center()
+        if random.random() > 0.5:
             self._improve_village_production()
+            self._improve_village_center()
         else:
-            self._improve_village_production()
             self._improve_village_center()
+            self._improve_village_production()
 
     def _improve_village_production(self):
         self.driver.get(self.MAIN_PAGE)
@@ -390,7 +447,7 @@ class Manager(object):
             logging.info('upgrade not available')
 
     def _create_build(self, b_type):
-        logging.info('create build %s', b_type)
+        logging.debug('create build %s', b_type)
         free_slots = [i for i in self.VILLAGE_BUILDINGS if i['type'] == BUILD_FREE]
         if not free_slots:
             logging.warning('not found free slots')
