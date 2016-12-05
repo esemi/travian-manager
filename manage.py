@@ -7,7 +7,7 @@ import re
 import logging
 import time
 import random
-
+import os
 
 from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
@@ -39,6 +39,10 @@ BUILDINGS = {
     BUILD_HEADQUARTERS: {'cat': 2, 'pattern': 'Пункт сбора'},
     BUILD_BARRACKS: {'cat': 2, 'pattern': 'Казарма'},
 }
+
+
+def send_desktop_notify(message):
+    os.system('notify-send "%s" "%s"' % ('travian-bot event', message))
 
 
 class Manager(object):
@@ -145,6 +149,7 @@ class Manager(object):
                 complete_button = self.driver.find_element_by_xpath('//button[@questbuttonnext="1"]')
                 complete_button.click()
                 logging.info('complete early quest')
+                send_desktop_notify('complete early quest')
             except NoSuchElementException:
                 return
 
@@ -163,6 +168,7 @@ class Manager(object):
                 complete_button = self.driver.find_element_by_xpath('//button[@questbuttongainreward="1"]')
                 complete_button.click()
                 logging.info('complete late quest')
+                send_desktop_notify('complete late quest')
                 break
 
         try:
@@ -229,7 +235,7 @@ class Manager(object):
         for row in table.find_elements_by_tag_name('tr')[1:]:
             title = str(row.find_element_by_class_name('res').text)
             value = str(row.find_element_by_class_name('num').text).strip()
-            value = int(re.findall(r'(\d+)', value)[0])
+            value = int(re.findall(r'([-]?\d+)', value)[0])
             logging.debug('production %s %d', title, value)
             type = None
             if 'Глина' in title:
@@ -247,23 +253,26 @@ class Manager(object):
     def _analyze_resource_stock(self):
         self.driver.get(self.MAIN_PAGE)
         stock_list = self.driver.find_element_by_id('stockBar')
+
+        def _get_resource_type(title):
+            if 'Глина' in title:
+                return RESOURCE_CLAY
+            elif 'Зерно' in title:
+                return RESOURCE_FOOD
+            elif 'Древесина' in title:
+                return RESOURCE_WOOD
+            elif 'Железо' in title:
+                return RESOURCE_IRON
+            return RESOURCE_FOOD_FREE
+
         result_stock = {}
-        for row in stock_list.find_elements_by_xpath('.//li[contains(@class, "stockBarButton")]'):
+        for row in stock_list.find_elements_by_xpath('.//li[contains(@class,"stockBarButton")]'):
             title = str(row.find_element_by_tag_name('img').get_attribute('alt')).strip()
-            value = str(row.find_element_by_xpath('.//span[@class="value"]').text).strip()
+            value = str(row.find_element_by_xpath('.//span[contains(@class, "value")]').text).strip()
             value = int(re.findall(r'(\d+)', value)[0])
             logging.debug('stock %s %d', title, value)
-            if 'Глина' in title:
-                type = RESOURCE_CLAY
-            elif 'Зерно' in title:
-                type = RESOURCE_FOOD
-            elif 'Древесина' in title:
-                type = RESOURCE_WOOD
-            elif 'Железо' in title:
-                type = RESOURCE_IRON
-            else:
-                type = RESOURCE_FOOD_FREE
-            result_stock[type] = value
+            res_type = _get_resource_type(title)
+            result_stock[res_type] = value
         logging.info('resource stock %s', result_stock)
         self.VILLAGE_RESOURCE_STOCK = result_stock
 
@@ -364,6 +373,7 @@ class Manager(object):
                 time.sleep(5)
                 adventure_send_button.click()
                 logging.info('send to adventure success')
+                send_desktop_notify('send to adventure')
             except NoSuchElementException:
                 logging.info('send to adventure not available')
 
@@ -440,6 +450,7 @@ class Manager(object):
             button = div.find_element_by_xpath('.//button[@class="green build"]')
             button.click()
             logging.info('upgrade complete')
+            send_desktop_notify('upgrade build %s' % link)
         except NoSuchElementException:
             logging.info('upgrade not available')
 
@@ -474,6 +485,7 @@ class Manager(object):
                 logging.debug('found build button')
                 button.click()
                 logging.info('create complete')
+                send_desktop_notify('create build %s' % prop)
                 return
             except NoSuchElementException:
                 pass
@@ -495,7 +507,9 @@ if __name__ == '__main__':
             m.run()
         except Exception as e:
             logging.error('exception %s', e)
+            send_desktop_notify('ЙА УПАЛО =(')
             # todo save screenshot
+            raise e
         finally:
             m.close()
 
