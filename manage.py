@@ -72,11 +72,11 @@ class Manager(object):
 
     VILLAGE_BUILDINGS_ETALON = {
         BUILD_HEADQUARTERS: 1,
-        BUILD_BASE: 3,
-        BUILD_STOCK: 2,
-        BUILD_GRANARY: 2,
-        BUILD_BARRACKS: 1,
-        BUILD_CACHE: 1,
+        BUILD_BASE: 5,
+        BUILD_STOCK: 3,
+        BUILD_GRANARY: 3,
+        BUILD_BARRACKS: 3,
+        BUILD_CACHE: 5,
     }
 
     def __init__(self, user, passwd):
@@ -114,15 +114,15 @@ class Manager(object):
             # забираем награды за квесты
             self._quest_complete()
 
-            # todo лимит развития ресурсовой карты
             # todo строим войска
-            # todo забираем награды за дейлики
             # todo выполняем задания = точная карта раскачки деревни ?
             # todo нотифаим если идёт атака
-            # todo прокачиваем героя
+            # todo забираем награды за дейлики
 
             # todo separate action log
             # todo screenshots for timelapse
+
+            self._sanitizing()
 
             sleep_time = self.RUN_TIMEOUT + self.RUN_TIMEOUT * random.random()
             logging.info('sleep random time %f', sleep_time)
