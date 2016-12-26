@@ -69,6 +69,9 @@ class Manager(object):
             # забираем награды за квесты
             self._quest_complete()
 
+            # шлём пылесосы по фарм листам
+            self._send_army_to_farm()
+
             self._sanitizing()
 
             sleep_time = self.RUN_TIMEOUT + self.RUN_TIMEOUT * random.random()
@@ -242,7 +245,7 @@ class Manager(object):
 
     def _send_hero_to_adventures(self):
         logging.info('send hero to adventure call')
-        if not self.hero_hp > self.HERO_HP_PERCENT_THRESHOLD:
+        if not self.hero_hp > config.HERO_HP_THRESHOLD_FOR_ADVENTURE:
             logging.info('hero hp is smaller than threshold %s', self.hero_hp)
             return
 
@@ -295,20 +298,102 @@ class Manager(object):
             })
         return result_builds
 
+    def _send_army_to_farm(self):
+        rally_point_href = self._find_rally_point()
+        logging.info('found rally point href %s', rally_point_href)
+        if not rally_point_href:
+            logging.info('not found rally point')
+            return
+        if not config.AUTO_FARM_LISTS:
+            logging.info('not found farm list for automate')
+            return
+
+        self.driver.get(rally_point_href)
+        farm_list_tab = self.driver.find_element_by_xpath('//a[@class="tabItem" and contains(text(), "%s")]' % config.FARM_LIST_TAB_PATTERN)
+        farm_list_tab.click()
+
+        farm_list_ids = []
+        for title_pattern in config.AUTO_FARM_LISTS:
+            logging.info('process farm list %s', title_pattern)
+            farm_lists = self.driver.find_elements_by_xpath('//div[@id="raidList"]/div[contains(@class, "listEntry")]')
+            for list_element in farm_lists:
+                title = list_element.find_element_by_class_name('listTitleText').text
+                logging.info('try process %s', title)
+                if title_pattern in title:
+                    farm_list_ids.append(list_element.get_attribute('id'))
+
+        logging.info('fetch farm list ids %s', farm_list_ids)
+        for id in farm_list_ids:
+            logging.info('process farm list id %s', id)
+
+            def _get_list(id):
+                return self.driver.find_element_by_xpath('//div[@id="%s"]' % id)
+
+            logging.info('sort list')
+            sort_column = _get_list(id).find_element_by_xpath('.//td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
+            sort_column.click()
+            time.sleep(5)
+
+            logging.info('check all')
+            _get_list(id).find_element_by_xpath('.//div[@class="markAll"]/input').click()
+
+            logging.info('uncheck slots')
+            slots = _get_list(id).find_elements_by_class_name('slotRow')
+            for tr in slots:
+                # ignore if currently attacked
+                logging.info('uncheck slot')
+                currently_attacked = False
+                try:
+                    currently_attacked_elem = tr.find_element_by_xpath('.//td[@class="village"]/img[contains(@class, "attack")]')
+                    if config.FARM_LIST_ALREADY_ATTACK_PATTERN in currently_attacked_elem.get_attribute('alt'):
+                        currently_attacked = True
+                except NoSuchElementException:
+                    pass
+
+                # ignore if last raid was loses
+                last_raid_result_losses = False
+                try:
+                    last_raid_result = tr.find_element_by_xpath('.//td[@class="lastRaid"]/img[contains(@class, "iReport")]')
+                    if config.FARM_LIST_WON_PATTERN not in last_raid_result.get_attribute('alt'):
+                        last_raid_result_losses = True
+                except NoSuchElementException:
+                    pass
+
+                if last_raid_result_losses or currently_attacked:
+                    checkbox_elem = tr.find_element_by_xpath('.//input[@type="checkbox"]')
+                    checkbox_elem.click()
+
+            logging.info('send farm')
+            button = _get_list(id).find_element_by_xpath('.//button[contains(@value, "%s")]' % config.FARM_LIST_SEND_BUTTON_PATTERN)
+            button.click()
+
+    def _find_rally_point(self):
+        self.driver.get(self.VILLAGE_PAGE)
+        map_content = self.driver.find_element_by_id('village_map')
+        builds = map_content.find_elements_by_tag_name('area')
+        for b in builds:
+            b_desc = str(b.get_attribute('alt'))
+            logging.debug('analyze build %s', b_desc)
+            if config.FARM_LIST_BUILDING_PATTERN in b_desc:
+                return str(b.get_attribute('href'))
+        return None
+
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
     logging.info('run %s %s' % config.CREDS)
 
     m = Manager(*config.CREDS)
     try:
         m.run()
+
     except Exception as e:
         logging.error('exception %s', e)
         send_desktop_notify('ЙА УПАЛО =(')
         # todo save screenshot
         raise e
 
-    m.close()
+    finally:
+        m.close()
 
 
