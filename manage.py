@@ -3,11 +3,11 @@
 
 import logging
 import time
-
-import operator
+from json import loads
 import os
 import random
 import re
+
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
@@ -29,6 +29,8 @@ class Manager(object):
     VILLAGE_PAGE = config.HOST + '/dorf2.php'
     HERO_PAGE = config.HOST + '/hero.php'
     HERO_ADVENTURE_PAGE = config.HOST + '/hero.php?t=3'
+    MAP_PAGE = config.HOST + '/karte.php'
+    MAP_DATA_PAGE = config.HOST + '/ajax.php?cmd=mapPositionData'
 
     is_logged = False
     resource_buildings = []
@@ -59,6 +61,9 @@ class Manager(object):
 
         while True:
             self._sanitizing()
+
+            # добавляем цели в фарм лист
+            self._update_farm_lists()
 
             # анализируем деревню
             self._analyze()
@@ -377,6 +382,82 @@ class Manager(object):
             if config.FARM_LIST_BUILDING_PATTERN in b_desc:
                 return str(b.get_attribute('href'))
         return None
+
+    def _update_farm_lists(self):
+        logging.info('process autofill farm list')
+
+        # todo for v in villages
+        # todo select village coords
+        village_x, village_y = config.tmp
+
+        # click map
+        self.driver.get(self.MAP_PAGE)
+        time.sleep(3)
+
+        # get ajax token value
+        ajax_token = self._parse_ajax_token()
+        logging.info('get ajax token %s', ajax_token)
+        if not ajax_token:
+            raise RuntimeError('ajax token not found')
+
+        # emulate ajax request for fetch response with selenium
+        form_html = """
+        <form id="randomFormId" method="POST" action="%s">
+            <input type="text" name="cmd" value="mapPositionData"></input>
+            <input type="text" name="data[x]" value="%d"></input>
+            <input type="text" name="data[y]" value="%d"></input>
+            <input type="text" name="data[zoomLevel]" value="3"></input>
+            <input type="text" name="ajaxToken" value="%s"></input>
+            <input type="submit"/>
+        </form>
+        """ % (self.MAP_DATA_PAGE, village_x, village_y, ajax_token)
+        elem = self.driver.find_element_by_tag_name('body')
+        script = "arguments[0].innerHTML += '%s';" % form_html.replace("\n", '')
+        logging.debug(script)
+
+        self.driver.execute_script(script, elem)
+        my_form = self.driver.find_element_by_id('randomFormId')
+        my_form.submit()
+        time.sleep(5)
+
+        players = self._extract_players_from_source()
+        logging.info('found %d players', len(players))
+        if not players:
+            raise RuntimeError('not found players on map (wtf?)')
+
+        # todo filtering by config (ally, inh, distance, tribe, conf ignored player)
+        # todo add to many farm lists
+
+        # time.sleep(300000)
+
+    def _parse_ajax_token(self):
+        source = self.driver.page_source
+        token_line = [i for i in source.split("\n") if 'ajaxToken' in i][0].strip()
+        logging.debug(token_line)
+        return token_line[-34:-2]
+
+    def _extract_players_from_source(self):
+        elem = self.driver.find_element_by_tag_name('pre')
+        map_dict = loads(elem.text)
+        players = [i for i in map_dict['response']['data']['tiles'] if 'u' in i]
+        result = []
+        for p in players:
+            try:
+                inh = int(re.findall(r'\{k\.einwohner\}\s*(\d+)<br\s+/>', p['t'])[0])
+            except IndexError:
+                # pass players oasis
+                continue
+            ally = re.findall(r'\{k\.allianz\}\s*(.+)<br\s+/>\{k\.volk\}', p['t'])[0].strip()
+            race_num = int(re.findall(r'\{k\.volk\}\s*\{a\.v(\d{1})\}', p['t'])[0].strip())
+            result.append({
+                'x': int(p['x']),
+                'y': int(p['y']),
+                'id': int(p['u']),
+                'ally': ally,
+                'race': race_num,
+                'inh': inh,
+            })
+        return result
 
 
 if __name__ == '__main__':
