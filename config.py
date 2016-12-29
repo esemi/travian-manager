@@ -31,9 +31,20 @@ FARM_LIST_WON_PATTERN = 'without losses'
 FARM_LIST_TAB_PATTERN = 'Farm List'
 FARM_LIST_ALREADY_ATTACK_PATTERN = 'Own attacking troops'
 
-AUTO_FARM_LISTS = [
-    'farm_list_name'
-]
+AUTO_FARM_LISTS = ['farm list fullname']
+
+AUTO_COLLECT_FARM_LISTS = [{
+    'center_x': 10,
+    'center_y': 20,
+    'list_name': 'farm_list_fullname_example',
+    'ignore_npc': False,
+    'only_npc': True,
+    'inh': {'max': 60, 'min': 16},
+    'troop_id': 't4',
+    'troop_count': 10
+},]
+IGNORE_FARM_PLAYERS = ['nikname1',]
+IGNORE_FARM_ALLY = ['allyname1',]
 
 try:
     from config_local import *
