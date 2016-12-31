@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 
+import os
+
+CHROME_DRIVER_PATH = os.path.sep.join([os.path.abspath(os.path.dirname(__file__)), 'chromedriver'])
+
 CREDS = ('login', 'pass')
 HOST = 'http://ts1.travian.ru'
 
@@ -43,6 +47,7 @@ AUTO_COLLECT_FARM_LISTS = [{
     'troop_id': 't4',
     'troop_count': 10
 },]
+
 
 IGNORE_FARM_PLAYERS = ['nikname1',]
 IGNORE_FARM_ALLY = ['allyname1',]

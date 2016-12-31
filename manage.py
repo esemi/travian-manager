@@ -10,7 +10,6 @@ import re
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.support.ui import Select
 
 import config
@@ -46,10 +45,9 @@ class Manager(object):
         self.user = user
         self.passwd = passwd
 
-        firefox_capabilities = DesiredCapabilities.FIREFOX
-        firefox_capabilities['marionette'] = True
-        firefox_capabilities['binary'] = '/usr/bin/firefox'
-        self.driver = webdriver.Firefox(capabilities=firefox_capabilities, timeout=self.REQUEST_TIMEOUT)
+        os.environ["webdriver.chrome.driver"] = config.CHROME_DRIVER_PATH
+        self.driver = webdriver.Chrome(executable_path=config.CHROME_DRIVER_PATH)
+        self.driver.set_page_load_timeout(self.REQUEST_TIMEOUT)
         self.driver.implicitly_wait(self.FIND_TIMEOUT)
 
     def close(self):
