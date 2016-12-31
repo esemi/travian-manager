@@ -43,8 +43,15 @@ AUTO_COLLECT_FARM_LISTS = [{
     'troop_id': 't4',
     'troop_count': 10
 },]
+
 IGNORE_FARM_PLAYERS = ['nikname1',]
 IGNORE_FARM_ALLY = ['allyname1',]
+
+ENABLE_SEND_FARMS = True
+ENABLE_UPDATE_FARMS = True
+ENABLE_TRADE = True
+ENABLE_ADVENTURES = True
+ENABLE_QUEST_COMPLETE = True
 
 try:
     from config_local import *

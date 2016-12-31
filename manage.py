@@ -69,22 +69,26 @@ class Manager(object):
             # анализируем деревню
             self._analyze()
 
-            # отправляем героя в приключения
-            self._send_hero_to_adventures()
+            if config.ENABLE_ADVENTURES:
+                # отправляем героя в приключения
+                self._send_hero_to_adventures()
 
-            # забираем награды за квесты
-            self._quest_complete()
+            if config.ENABLE_QUEST_COMPLETE:
+                # забираем награды за квесты
+                self._quest_complete()
 
-            # шлём пылесосы по фарм листам
-            self._send_army_to_farm()
+            if config.ENABLE_SEND_FARMS:
+                # шлём пылесосы по фарм листам
+                self._send_army_to_farm()
 
-            # добавляем цели в фарм лист
-            self._update_farm_lists()
+            if config.ENABLE_UPDATE_FARMS:
+                # добавляем цели в фарм лист
+                self._update_farm_lists()
 
             self._sanitizing()
 
             sleep_time = self.RUN_TIMEOUT + self.RUN_TIMEOUT * random.random()
-            logging.info('sleep random time %f', sleep_time)
+            logging.info('sleep random time %f %d', sleep_time, self.loop_number)
             time.sleep(sleep_time)
 
     def _sanitizing(self):
@@ -571,7 +575,7 @@ if __name__ == '__main__':
         send_desktop_notify('ЙА УПАЛО =(')
         # todo save screenshot
         raise e
-    
+
     finally:
         m.close()
 

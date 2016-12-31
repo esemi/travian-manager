@@ -15,9 +15,12 @@ Travian manager
 
 
 ##### TODO
-- check summary population of player for select new farms
-- save cookie for next run
 - chrome driver
+
+- check summary population of player for select new farms
+- ignore villages already exist in farm list for new add
+- auction trading
+- save cookie for next run
 - забираем награды за дейлики
 - ускорить обработку списка фарма (css selector?)
 
