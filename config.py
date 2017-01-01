@@ -3,6 +3,8 @@
 import os
 
 CHROME_DRIVER_PATH = os.path.sep.join([os.path.abspath(os.path.dirname(__file__)), 'chromedriver'])
+FIND_TIMEOUT = 7
+REQUEST_TIMEOUT = 20
 
 CREDS = ('login', 'pass')
 HOST = 'http://ts1.travian.ru'
@@ -27,7 +29,7 @@ RESOURCE_BUILD_PATTERN_LEVEL = 'Level'
 
 BUILD_QUEUE_SLOTS_LIMIT = 2
 
-HERO_HP_THRESHOLD_FOR_ADVENTURE = 80
+HERO_HP_THRESHOLD_FOR_ADVENTURE = 65
 
 FARM_LIST_SEND_BUTTON_PATTERN = 'Start raid'
 FARM_LIST_BUILDING_PATTERN = 'Rally Point'
@@ -51,6 +53,12 @@ AUTO_COLLECT_FARM_LISTS = [{
 
 IGNORE_FARM_PLAYERS = ['nikname1',]
 IGNORE_FARM_ALLY = ['allyname1',]
+
+AUCTION_BIDS = {
+    'Ointment': 21,
+    'Cage': 31,
+    'Small Bandage': 12,
+}
 
 ENABLE_SEND_FARMS = True
 ENABLE_UPDATE_FARMS = True

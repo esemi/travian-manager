@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import logging
@@ -22,13 +22,12 @@ def send_desktop_notify(message):
 class Manager(object):
 
     RUN_TIMEOUT = 10 * 60
-    REQUEST_TIMEOUT = 20
-    FIND_TIMEOUT = 5
 
     MAIN_PAGE = config.HOST + '/dorf1.php'
     VILLAGE_PAGE = config.HOST + '/dorf2.php'
     HERO_PAGE = config.HOST + '/hero.php'
     HERO_ADVENTURE_PAGE = config.HOST + '/hero.php?t=3'
+    AUCTION_PAGE = config.HOST + '/hero.php?t=4&action=buy'
     MAP_PAGE = config.HOST + '/karte.php'
     MAP_DATA_PAGE = config.HOST + '/ajax.php?cmd=mapPositionData'
 
@@ -47,8 +46,8 @@ class Manager(object):
 
         os.environ["webdriver.chrome.driver"] = config.CHROME_DRIVER_PATH
         self.driver = webdriver.Chrome(executable_path=config.CHROME_DRIVER_PATH)
-        self.driver.set_page_load_timeout(self.REQUEST_TIMEOUT)
-        self.driver.implicitly_wait(self.FIND_TIMEOUT)
+        self.driver.set_page_load_timeout(config.REQUEST_TIMEOUT)
+        self.driver.implicitly_wait(config.FIND_TIMEOUT)
 
     def close(self):
         if self.driver:
@@ -66,6 +65,10 @@ class Manager(object):
 
             # анализируем деревню
             self._analyze()
+
+            if config.ENABLE_TRADE:
+                # торгуем (пока только покупаем)
+                self._trading()
 
             if config.ENABLE_ADVENTURES:
                 # отправляем героя в приключения
@@ -464,6 +467,7 @@ class Manager(object):
             id = self.__search_farmlist_id_by_title(conf['list_name'])
             if not id:
                 self.__create_farm_list(conf['list_name'])
+                send_desktop_notify('create new farm list %s' % conf['list_name'])
                 id = self.__search_farmlist_id_by_title(conf['list_name'])
 
             logging.info('farm list id %s', id)
@@ -473,6 +477,7 @@ class Manager(object):
             for p in players_filter:
                 self.__add_to_farm_list(id, p, conf['troop_id'], conf['troop_count'])
                 logging.info('add player to farm %s', p['name'])
+                send_desktop_notify('add player to farm %s' % p['name'])
 
     def _parse_ajax_token(self):
         source = self.driver.page_source
@@ -558,6 +563,79 @@ class Manager(object):
         troop_input.send_keys(str(troop_count))
 
         form.find_element_by_id('save').click()
+
+    def _trading(self):
+        if not config.AUCTION_BIDS:
+            return
+
+        minimal_price = min(config.AUCTION_BIDS.values())
+        logging.info('trading start: minimal bid is %d', minimal_price)
+        self.driver.get(self.AUCTION_PAGE)
+
+        i = 0
+        while i < 100:
+            i += 1
+            logging.info('trade loop %d', i)
+            silver_coins_str = self.driver.find_element_by_class_name('ajaxReplaceableSilverAmount').text
+            coins_count = int(silver_coins_str)
+            logging.info('free coins %d', coins_count)
+
+            if coins_count < minimal_price:
+                logging.warning('coins too low')
+                return
+
+            try:
+                next_bid_elem = self.driver.find_element_by_xpath('//div[@id="auction"]//tbody/tr[%d]' % i)
+            except NoSuchElementException:
+                logging.info('not found next bid %d', i)
+                break
+
+            item_price = int(next_bid_elem.find_element_by_class_name('silver').text)
+            logging.info('item cost %s', item_price)
+
+            if coins_count < item_price:
+                logging.info('skip by coins amount %d %d', item_price, coins_count)
+                continue
+
+            item_name_str = next_bid_elem.find_element_by_class_name('name').text
+            logging.info('item name string %s', item_name_str)
+
+            item_count = int(re.findall(r'(\d+)‬×‬', item_name_str)[0])
+            logging.info('item count %d', item_count)
+
+            item_bid = None
+            for pattern, bid_value in config.AUCTION_BIDS.items():
+                if pattern in item_name_str:
+                    logging.info('select %s item %d', pattern, bid_value)
+                    item_bid = bid_value
+                    break
+
+            if not item_bid:
+                logging.info('skip not interested item')
+                continue
+
+            if item_price / item_count >= item_bid:
+                logging.info('skip by price')
+                continue
+
+            try:
+                bid_link = next_bid_elem.find_element_by_xpath('.//td[@class="bid"]/a[contains(text(), "Bid")]')
+            except NoSuchElementException:
+                logging.info('not found bid link')
+                continue
+            bid_link.click()
+
+            bid = item_bid * item_count
+            logging.info('bid try %d', bid)
+            time.sleep(3)
+
+            self.driver.find_element_by_xpath('//input[@name="maxBid"]').send_keys(str(bid))
+            self.driver.find_element_by_xpath('//div[@class="submitBid"]/button[@type="submit"]').click()
+            logging.info('bid save')
+            time.sleep(3)
+            send_desktop_notify('trade: bid item %s by %d' % (item_name_str, bid))
+
+            self.driver.get(self.AUCTION_PAGE)
 
 
 if __name__ == '__main__':

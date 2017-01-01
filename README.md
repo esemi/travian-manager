@@ -15,15 +15,14 @@ https://chromedriver.storage.googleapis.com/index.html
 - отправлять героя в приключения (при полном здоровье)
 - фармить по готовым спискам (очерёдность случайная)
 - обновлять списки фарма (только при первом запуске)
+- покупать лоты на ауке
 - оповещать на десктоп о своих действиях
 
 
 ##### TODO
-- chrome driver
 
 - check summary population of player for select new farms
 - ignore villages already exist in farm list for new add
-- auction trading
 - save cookie for next run
 - забираем награды за дейлики
 - ускорить обработку списка фарма (css selector?)
