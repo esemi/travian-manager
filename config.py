@@ -55,9 +55,9 @@ IGNORE_FARM_PLAYERS = ['nikname1',]
 IGNORE_FARM_ALLY = ['allyname1',]
 
 AUCTION_BIDS = {
-    'Ointment': 21,
-    'Cage': 31,
-    'Small Bandage': 12,
+    'Ointment': 10,
+    'Cage': 15,
+    'Small Bandage': 5,
 }
 
 ENABLE_SEND_FARMS = True

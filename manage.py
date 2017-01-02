@@ -7,6 +7,7 @@ from json import loads
 import os
 import random
 import re
+from shlex import quote
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
@@ -16,7 +17,62 @@ import config
 
 
 def send_desktop_notify(message):
-    os.system('notify-send "%s" "%s"' % ('travian-bot event', message))
+    os.system('notify-send "%s" "%s"' % ('travian-bot event', quote(message)))
+
+
+def unique_village_mask(name, x, y):
+    return '_'.join([name.strip(), str(x), str(y)])
+
+
+def apply_players_filter(players, conf, exist_villages):
+    result = players
+    result = [p for p in result if p['name'] not in config.IGNORE_FARM_PLAYERS and
+              p['ally'] not in config.IGNORE_FARM_ALLY]
+    logging.info('filtered by ignore config %d', len(result))
+
+    if 'ignore_npc' in conf and conf['ignore_npc']:
+        result = [p for p in result if p['race'] != 5]
+    if 'only_npc' in conf and conf['only_npc']:
+        result = [p for p in result if p['race'] == 5]
+    logging.info('filtered by race %d', len(result))
+
+    if 'inh' in conf:
+        min = 0 if 'min' not in conf['inh'] else conf['inh']['min']
+        max = 999999 if 'max' not in conf['inh'] else conf['inh']['max']
+        result = [p for p in result if min <= p['inh'] <= max]
+    logging.info('filtered by inh %d', len(result))
+
+    result = [p for p in result if unique_village_mask(p['v_name'], p['x'], p['y']) not in exist_villages]
+    logging.info('filtered by already exist %d', len(result))
+
+    return result
+
+
+def extract_players_from_source(source):
+    map_dict = loads(source)
+    players = [i for i in map_dict['response']['data']['tiles'] if 'u' in i]
+    result = []
+    for p in players:
+        try:
+            inh = int(re.findall(r'\{k\.einwohner\}\s*(\d+)<br\s+/>', p['t'])[0])
+        except IndexError:
+            # pass players oasis
+            continue
+        ally = re.findall(r'\{k\.allianz\}\s*(.+)<br\s+/>\{k\.volk\}', p['t'])[0].strip()
+        race_num = int(re.findall(r'\{k\.volk\}\s*\{a\.v(\d{1})\}', p['t'])[0].strip())
+        name = re.findall(r'\{k\.spieler\}\s*(.+)<br\s+/>\{k\.einwohner\}', p['t'])[0].strip()
+        village_name = re.findall(r'\{k\.dt\}\s*(.*)', p['c'])[0].strip()
+        result.append({
+            'x': int(p['x']),
+            'y': int(p['y']),
+            'id': int(p['u']),
+            'ally': ally,
+            'name': name,
+            'race': race_num,
+            'inh': inh,
+            'v_name': village_name
+        })
+    return result
 
 
 class Manager(object):
@@ -173,16 +229,16 @@ class Manager(object):
         logging.info('analyze call')
 
         # analyze resource buildings
-        self._analyze_resource_buildings()
-
-        # analyze resource input
-        self._analyze_resource_production()
-
-        # analyze resource stock
-        self._analyze_resource_stock()
+        # self._analyze_resource_buildings()
+        #
+        # # analyze resource input
+        # self._analyze_resource_production()
+        #
+        # # analyze resource stock
+        # self._analyze_resource_stock()
 
         # analyze buildings queue
-        self._analyze_buildings_queue()
+        # self._analyze_buildings_queue()
 
         # analyze hero
         self._analyze_hero()
@@ -343,6 +399,20 @@ class Manager(object):
                 return list_element.get_attribute('id')
         return None
 
+    def __extract_exist_villages_from_farmlist(self):
+        res = []
+        slots = self.driver.find_elements_by_xpath('//tr[@class="slotRow"]')
+        for tr in slots:
+            try:
+                el = tr.find_element_by_class_name('village').find_element_by_tag_name('a')
+                v_name = el.text
+                x = int(re.findall(r'x=(\d+)', el.get_attribute('href'))[0])
+                y = int(re.findall(r'y=(\d+)', el.get_attribute('href'))[0])
+                res.append(unique_village_mask(v_name, x, y))
+            except NoSuchElementException:
+                continue
+        return set(res)
+
     def _send_army_to_farm(self):
         if not config.AUTO_FARM_LISTS:
             logging.info('not found farm list for automate')
@@ -417,15 +487,14 @@ class Manager(object):
         return None
 
     def _update_farm_lists(self):
-        if self.loop_number > 1:
-            return
-
         logging.info('process autofill farm list')
-
         res = self._goto_farmlist()
         if not res:
             logging.warning('not found farm list link - pass')
             return
+
+        exist_villages = self.__extract_exist_villages_from_farmlist()
+        logging.info('found %d already exist villages', len(exist_villages))
 
         for conf in config.AUTO_COLLECT_FARM_LISTS:
             logging.info('process farm collect config %s', conf)
@@ -454,14 +523,14 @@ class Manager(object):
             my_form.submit()
             time.sleep(5)
 
-            players = self._extract_players_from_source(self.driver.find_element_by_tag_name('pre').text)
+            players = extract_players_from_source(self.driver.find_element_by_tag_name('pre').text)
             logging.info('found %d players', len(players))
 
-            players_filter = self._apply_players_filter(players, conf)
+            players_filter = apply_players_filter(players, conf, exist_villages)
             logging.info('filtered to %d players', len(players_filter))
 
             if not players_filter:
-                return
+                continue
 
             self._goto_farmlist()
             id = self.__search_farmlist_id_by_title(conf['list_name'])
@@ -476,59 +545,14 @@ class Manager(object):
 
             for p in players_filter:
                 self.__add_to_farm_list(id, p, conf['troop_id'], conf['troop_count'])
-                logging.info('add player to farm %s', p['name'])
-                send_desktop_notify('add player to farm %s' % p['name'])
+                logging.info('add player to farm %s', p['v_name'])
+                send_desktop_notify('add player to farm %s' % p['v_name'])
 
     def _parse_ajax_token(self):
         source = self.driver.page_source
         token_line = [i for i in source.split("\n") if 'ajaxToken' in i][0].strip()
         logging.debug(token_line)
         return token_line[-34:-2]
-
-    @staticmethod
-    def _extract_players_from_source(source):
-        map_dict = loads(source)
-        players = [i for i in map_dict['response']['data']['tiles'] if 'u' in i]
-        result = []
-        for p in players:
-            try:
-                inh = int(re.findall(r'\{k\.einwohner\}\s*(\d+)<br\s+/>', p['t'])[0])
-            except IndexError:
-                # pass players oasis
-                continue
-            ally = re.findall(r'\{k\.allianz\}\s*(.+)<br\s+/>\{k\.volk\}', p['t'])[0].strip()
-            race_num = int(re.findall(r'\{k\.volk\}\s*\{a\.v(\d{1})\}', p['t'])[0].strip())
-            name = re.findall(r'\{k\.spieler\}\s*(.+)<br\s+/>\{k\.einwohner\}', p['t'])[0].strip()
-            result.append({
-                'x': int(p['x']),
-                'y': int(p['y']),
-                'id': int(p['u']),
-                'ally': ally,
-                'name': name,
-                'race': race_num,
-                'inh': inh,
-            })
-        return result
-
-    @staticmethod
-    def _apply_players_filter(players, conf):
-        result = [p for p in players if p['name'] not in config.IGNORE_FARM_PLAYERS and
-                            p['ally'] not in config.IGNORE_FARM_ALLY]
-        logging.info('filtered by ignore config %d', len(result))
-
-        if 'ignore_npc' in conf and conf['ignore_npc']:
-            result = [p for p in result if p['race'] != 5]
-        if 'only_npc' in conf and conf['only_npc']:
-            result = [p for p in result if p['race'] == 5]
-        logging.info('filtered by race %d', len(result))
-
-        if 'inh' in conf:
-            min = 0 if 'min' not in conf['inh'] else conf['inh']['min']
-            max = 999999 if 'max' not in conf['inh'] else conf['inh']['max']
-            result = [p for p in result if min <= p['inh'] <= max]
-        logging.info('filtered by inh %d', len(result))
-
-        return result
 
     def __create_farm_list(self, list_name):
         logging.info('create new farm list %s', list_name)
@@ -575,68 +599,71 @@ class Manager(object):
         i = 0
         while i < 100:
             i += 1
-            logging.info('trade loop %d', i)
-            silver_coins_str = self.driver.find_element_by_class_name('ajaxReplaceableSilverAmount').text
-            coins_count = int(silver_coins_str)
-            logging.info('free coins %d', coins_count)
-
-            if coins_count < minimal_price:
-                logging.warning('coins too low')
-                return
-
             try:
-                next_bid_elem = self.driver.find_element_by_xpath('//div[@id="auction"]//tbody/tr[%d]' % i)
-            except NoSuchElementException:
-                logging.info('not found next bid %d', i)
-                break
+                logging.info('trade loop %d', i)
+                silver_coins_str = self.driver.find_element_by_class_name('ajaxReplaceableSilverAmount').text
+                coins_count = int(silver_coins_str)
+                logging.info('free coins %d', coins_count)
 
-            item_price = int(next_bid_elem.find_element_by_class_name('silver').text)
-            logging.info('item cost %s', item_price)
+                if coins_count < minimal_price:
+                    logging.warning('coins too low')
+                    return
 
-            if coins_count < item_price:
-                logging.info('skip by coins amount %d %d', item_price, coins_count)
-                continue
-
-            item_name_str = next_bid_elem.find_element_by_class_name('name').text
-            logging.info('item name string %s', item_name_str)
-
-            item_count = int(re.findall(r'(\d+)‬×‬', item_name_str)[0])
-            logging.info('item count %d', item_count)
-
-            item_bid = None
-            for pattern, bid_value in config.AUCTION_BIDS.items():
-                if pattern in item_name_str:
-                    logging.info('select %s item %d', pattern, bid_value)
-                    item_bid = bid_value
+                try:
+                    next_bid_elem = self.driver.find_element_by_xpath('//div[@id="auction"]//tbody/tr[%d]' % i)
+                except NoSuchElementException:
+                    logging.info('not found next bid %d', i)
                     break
 
-            if not item_bid:
-                logging.info('skip not interested item')
-                continue
+                item_price = int(next_bid_elem.find_element_by_class_name('silver').text)
+                logging.info('item cost %s', item_price)
 
-            if item_price / item_count >= item_bid:
-                logging.info('skip by price')
-                continue
+                if coins_count < item_price:
+                    logging.info('skip by coins amount %d %d', item_price, coins_count)
+                    continue
 
-            try:
-                bid_link = next_bid_elem.find_element_by_xpath('.//td[@class="bid"]/a[contains(text(), "Bid")]')
-            except NoSuchElementException:
-                logging.info('not found bid link')
-                continue
-            bid_link.click()
+                item_name_str = next_bid_elem.find_element_by_class_name('name').text
+                logging.info('item name string %s', item_name_str)
 
-            bid = item_bid * item_count
-            logging.info('bid try %d', bid)
-            time.sleep(3)
+                item_count = int(re.findall(r'(\d+)‬×‬', item_name_str)[0])
+                logging.info('item count %d', item_count)
 
-            self.driver.find_element_by_xpath('//input[@name="maxBid"]').send_keys(str(bid))
-            self.driver.find_element_by_xpath('//div[@class="submitBid"]/button[@type="submit"]').click()
-            logging.info('bid save')
-            time.sleep(3)
-            send_desktop_notify('trade: bid item %s by %d' % (item_name_str, bid))
+                item_bid = None
+                for pattern, bid_value in config.AUCTION_BIDS.items():
+                    if pattern in item_name_str:
+                        logging.info('select %s item %d', pattern, bid_value)
+                        item_bid = bid_value
+                        break
 
-            self.driver.get(self.AUCTION_PAGE)
+                if not item_bid:
+                    logging.info('skip not interested item')
+                    continue
 
+                if item_price / item_count >= item_bid:
+                    logging.info('skip by price')
+                    continue
+
+                try:
+                    bid_link = next_bid_elem.find_element_by_xpath('.//td[@class="bid"]/a[contains(text(), "Bid")]')
+                except NoSuchElementException:
+                    logging.info('not found bid link')
+                    continue
+                bid_link.click()
+
+                bid = item_bid * item_count
+                logging.info('bid try %d', bid)
+                time.sleep(3)
+
+                self.driver.find_element_by_xpath('//input[@name="maxBid"]').send_keys(str(bid))
+                self.driver.find_element_by_xpath('//div[@class="submitBid"]/button[@type="submit"]').click()
+            except Exception as e:
+                logging.error(e)
+                i -= 1
+            else:
+                logging.info('bid save')
+                time.sleep(3)
+                send_desktop_notify('trade: bid item %s by %d' % (item_name_str, bid))
+                self.driver.get(self.AUCTION_PAGE)
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
