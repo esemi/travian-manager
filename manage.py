@@ -16,6 +16,10 @@ from selenium.webdriver.support.ui import Select
 import config
 
 
+def custom_wait():
+    time.sleep(config.CUSTOM_WAIT_TIMEOUT)
+
+
 def send_desktop_notify(message):
     os.system('notify-send "%s" "%s"' % ('travian-bot event', quote(message)))
 
@@ -122,25 +126,40 @@ class Manager(object):
             # анализируем деревню
             self._analyze()
 
-            if config.ENABLE_TRADE:
-                # торгуем (пока только покупаем)
-                self._trading()
-
             if config.ENABLE_ADVENTURES:
                 # отправляем героя в приключения
-                self._send_hero_to_adventures()
+                try:
+                    self._send_hero_to_adventures()
+                except Exception as e:
+                    logging.error('adventures process exception %s', e)
 
             if config.ENABLE_QUEST_COMPLETE:
                 # забираем награды за квесты
-                self._quest_complete()
+                try:
+                    self._quest_complete()
+                except Exception as e:
+                    logging.error('quests process exception %s', e)
 
             if config.ENABLE_SEND_FARMS:
                 # шлём пылесосы по фарм листам
-                self._send_army_to_farm()
+                try:
+                    self._send_army_to_farm()
+                except Exception as e:
+                    logging.error('farm send process exception %s', e)
+
+            if config.ENABLE_TRADE:
+                # торгуем (пока только покупаем)
+                try:
+                    self._trading()
+                except Exception as e:
+                    logging.error('trade process exception %s', e)
 
             if config.ENABLE_UPDATE_FARMS:
                 # добавляем цели в фарм лист
-                self._update_farm_lists()
+                try:
+                    self._update_farm_lists()
+                except Exception as e:
+                    logging.error('farm update process exception %s', e)
 
             self._sanitizing()
 
@@ -336,7 +355,7 @@ class Manager(object):
             try:
                 adventure_send_button = self.driver.find_element_by_xpath('//form[@class="adventureSendButton"]'
                                                                           '//button[contains(@class, "green")]')
-                time.sleep(5)
+                custom_wait()
                 adventure_send_button.click()
                 logging.info('send to adventure success')
                 send_desktop_notify('send to adventure')
@@ -384,7 +403,7 @@ class Manager(object):
         farm_list_tab = self.driver.find_element_by_xpath(
             '//a[@class="tabItem" and contains(text(), "%s")]' % config.FARM_LIST_TAB_PATTERN)
         farm_list_tab.click()
-        time.sleep(5)
+        custom_wait()
         return True
 
     def __search_farmlist_by_id(self, id):
@@ -406,11 +425,17 @@ class Manager(object):
             try:
                 el = tr.find_element_by_class_name('village').find_element_by_tag_name('a')
                 v_name = el.text
-                x = int(re.findall(r'x=(\d+)', el.get_attribute('href'))[0])
-                y = int(re.findall(r'y=(\d+)', el.get_attribute('href'))[0])
-                res.append(unique_village_mask(v_name, x, y))
             except NoSuchElementException:
                 continue
+
+            try:
+                x = int(re.findall(r'x=([-]?\d+)', el.get_attribute('href'))[0])
+                y = int(re.findall(r'y=([-]?\d+)', el.get_attribute('href'))[0])
+            except IndexError:
+                logging.warning('invalid farmlist slot %s', v_name)
+                continue
+
+            res.append(unique_village_mask(v_name, x, y))
         return set(res)
 
     def _send_army_to_farm(self):
@@ -438,7 +463,7 @@ class Manager(object):
             logging.info('sort list')
             sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath('.//td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
             sort_column.click()
-            time.sleep(5)
+            custom_wait()
 
             logging.info('check all')
             self.__search_farmlist_by_id(id).find_element_by_xpath('.//div[@class="markAll"]/input').click()
@@ -487,6 +512,9 @@ class Manager(object):
         return None
 
     def _update_farm_lists(self):
+        if self.loop_number > 1:
+            return
+
         logging.info('process autofill farm list')
         res = self._goto_farmlist()
         if not res:
@@ -501,7 +529,7 @@ class Manager(object):
 
             # click map
             self.driver.get(self.MAP_PAGE)
-            time.sleep(3)
+            custom_wait()
 
             # emulate ajax request for fetch response with selenium
             form_html = """
@@ -521,7 +549,7 @@ class Manager(object):
             self.driver.execute_script(script, elem)
             my_form = self.driver.find_element_by_id('randomFormId')
             my_form.submit()
-            time.sleep(5)
+            custom_wait()
 
             players = extract_players_from_source(self.driver.find_element_by_tag_name('pre').text)
             logging.info('found %d players', len(players))
@@ -532,7 +560,9 @@ class Manager(object):
             if not players_filter:
                 continue
 
-            self._goto_farmlist()
+            if not self._goto_farmlist():
+                continue
+
             id = self.__search_farmlist_id_by_title(conf['list_name'])
             if not id:
                 self.__create_farm_list(conf['list_name'])
@@ -559,7 +589,7 @@ class Manager(object):
         village_name, list_name = list_name.split(' - ')
 
         self.driver.find_element_by_xpath('//div[@class="options"]/a[@class="arrow"]').click()
-        time.sleep(5)
+        custom_wait()
 
         create_elem = self.driver.find_element_by_id('raidListCreate')
         create_elem.find_element_by_xpath('.//input[@name="listName"]').send_keys(list_name)
@@ -568,13 +598,13 @@ class Manager(object):
         select.select_by_visible_text(village_name)
 
         create_elem.find_element_by_xpath('.//button[@value="Create"]').click()
-        time.sleep(5)
+        custom_wait()
         self._goto_farmlist()
 
     def __add_to_farm_list(self, id, p, troop_id, troop_count):
-        time.sleep(3)
+        custom_wait()
         self.__search_farmlist_by_id(id).find_element_by_xpath('.//div[@class="addSlot"]/button[@value="Add"]').click()
-        time.sleep(5)
+        custom_wait()
 
         form = self.driver.find_element_by_id('raidListSlot')
         form.find_element_by_id('xCoordInput').clear()
@@ -652,7 +682,7 @@ class Manager(object):
 
                 bid = item_bid * item_count
                 logging.info('bid try %d', bid)
-                time.sleep(3)
+                custom_wait()
 
                 self.driver.find_element_by_xpath('//input[@name="maxBid"]').send_keys(str(bid))
                 self.driver.find_element_by_xpath('//div[@class="submitBid"]/button[@type="submit"]').click()
@@ -661,7 +691,7 @@ class Manager(object):
                 i -= 1
             else:
                 logging.info('bid save')
-                time.sleep(3)
+                custom_wait()
                 send_desktop_notify('trade: bid item %s by %d' % (item_name_str, bid))
                 self.driver.get(self.AUCTION_PAGE)
 

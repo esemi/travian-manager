@@ -3,8 +3,9 @@
 import os
 
 CHROME_DRIVER_PATH = os.path.sep.join([os.path.abspath(os.path.dirname(__file__)), 'chromedriver'])
-FIND_TIMEOUT = 7
-REQUEST_TIMEOUT = 20
+FIND_TIMEOUT = 10
+REQUEST_TIMEOUT = 25
+CUSTOM_WAIT_TIMEOUT = 5
 
 CREDS = ('login', 'pass')
 HOST = 'http://ts1.travian.ru'
