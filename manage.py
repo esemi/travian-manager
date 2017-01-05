@@ -21,7 +21,7 @@ def custom_wait():
 
 
 def send_desktop_notify(message):
-    os.system('notify-send "%s" "%s"' % ('travian-bot event', quote(message)))
+    os.system('notify-send "%s" "%s"' % ('travian-bot event', quote(message).replace('`', '\`')))
 
 
 def unique_village_mask(name, x, y):
@@ -485,6 +485,7 @@ class Manager(object):
                 last_raid_result_losses = False
                 try:
                     last_raid_result = tr.find_element_by_xpath('.//td[@class="lastRaid"]/img[contains(@class, "iReport")]')
+                    logging.info('uncheck slot 2')
                     if config.FARM_LIST_WON_PATTERN not in last_raid_result.get_attribute('alt'):
                         last_raid_result_losses = True
                 except NoSuchElementException:
@@ -512,8 +513,8 @@ class Manager(object):
         return None
 
     def _update_farm_lists(self):
-        if self.loop_number > 1:
-            return
+        # if self.loop_number > 1:
+        #     return
 
         logging.info('process autofill farm list')
         res = self._goto_farmlist()
@@ -575,7 +576,9 @@ class Manager(object):
 
             for p in players_filter:
                 self.__add_to_farm_list(id, p, conf['troop_id'], conf['troop_count'])
-                logging.info('add player to farm %s', p['v_name'])
+                mask = unique_village_mask(p['v_name'], p['x'], p['y'])
+                logging.info('add player to farm %s', mask)
+                exist_villages.add(mask)
                 send_desktop_notify('add player to farm %s' % p['v_name'])
 
     def _parse_ajax_token(self):
