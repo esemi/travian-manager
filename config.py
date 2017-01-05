@@ -37,6 +37,7 @@ FARM_LIST_BUILDING_PATTERN = 'Rally Point'
 FARM_LIST_WON_PATTERN = 'without losses'
 FARM_LIST_TAB_PATTERN = 'Farm List'
 FARM_LIST_ALREADY_ATTACK_PATTERN = 'Own attacking troops'
+FARM_LIST_SEND_RESULT_PATTERN = 'raids have been made'
 
 AUTO_FARM_LISTS = ['farm list fullname']
 

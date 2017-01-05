@@ -465,41 +465,29 @@ class Manager(object):
             sort_column.click()
             custom_wait()
 
-            logging.info('check all')
-            self.__search_farmlist_by_id(id).find_element_by_xpath('.//div[@class="markAll"]/input').click()
-
-            logging.info('uncheck slots')
+            logging.info('select villages')
             slots = self.__search_farmlist_by_id(id).find_elements_by_class_name('slotRow')
             for tr in slots:
+                raw_content = tr.get_attribute('innerHTML')
                 # ignore if currently attacked
-                logging.info('uncheck slot')
-                currently_attacked = False
-                try:
-                    currently_attacked_elem = tr.find_element_by_xpath('.//td[@class="village"]/img[contains(@class, "attack")]')
-                    if config.FARM_LIST_ALREADY_ATTACK_PATTERN in currently_attacked_elem.get_attribute('alt'):
-                        currently_attacked = True
-                except NoSuchElementException:
-                    pass
-
+                if config.FARM_LIST_ALREADY_ATTACK_PATTERN in raw_content:
+                    continue
                 # ignore if last raid was loses
-                last_raid_result_losses = False
-                try:
-                    last_raid_result = tr.find_element_by_xpath('.//td[@class="lastRaid"]/img[contains(@class, "iReport")]')
-                    logging.info('uncheck slot 2')
-                    if config.FARM_LIST_WON_PATTERN not in last_raid_result.get_attribute('alt'):
-                        last_raid_result_losses = True
-                except NoSuchElementException:
-                    pass
-
-                if last_raid_result_losses or currently_attacked:
-                    checkbox_elem = tr.find_element_by_xpath('.//input[@type="checkbox"]')
-                    checkbox_elem.click()
+                if config.FARM_LIST_WON_PATTERN not in raw_content:
+                    continue
+                checkbox_elem = tr.find_element_by_xpath('.//input[@type="checkbox"]')
+                checkbox_elem.click()
 
             logging.info('send farm')
             button = self.__search_farmlist_by_id(id).find_element_by_xpath('.//button[contains(@value, "%s")]' % config.FARM_LIST_SEND_BUTTON_PATTERN)
             button.click()
+            custom_wait()
 
-            # todo log message
+            try:
+                result = self.__search_farmlist_by_id(id).find_element_by_xpath('.//p[contains(text(), "%s")]' % config.FARM_LIST_SEND_RESULT_PATTERN)
+                logging.info('result message is %s', result.text)
+            except NoSuchElementException:
+                logging.warning('not found result message')
 
     def _find_rally_point(self):
         self.driver.get(self.VILLAGE_PAGE)

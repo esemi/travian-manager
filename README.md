@@ -20,12 +20,10 @@ https://chromedriver.storage.googleapis.com/index.html
 
 
 ##### TODO
-- ускорить обработку списка фарма (css selector?)
-- fix all attacked list case
-
 - check summary population of player for select new farms
 - save cookie for next run
 - забираем награды за дейлики
+- fix all attacked list case
 
 - строим войска
 - развиваем деревню и поля по конфигу
