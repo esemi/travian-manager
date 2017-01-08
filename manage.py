@@ -178,14 +178,6 @@ class Manager(object):
         logging.info('complete quest call')
         self.driver.get(self.MAIN_PAGE)
 
-        # open quest dialog
-        try:
-            quest_master = self.driver.find_element_by_id('questmasterButton')
-            quest_master.click()
-        except NoSuchElementException:
-            logging.info('all quest completed')
-            return
-
         # ранние квесты
         def _process_early_quest():
             try:
@@ -215,13 +207,43 @@ class Manager(object):
                 break
 
         try:
-            quest_list = self.driver.find_element_by_id('questTodoListDialog')
+            # open quest dialog
+            quest_master = self.driver.find_element_by_id('questmasterButton')
+            quest_master.click()
         except NoSuchElementException:
-            logging.info('early quest process')
-            _process_early_quest()
+            logging.info('all quest completed')
         else:
-            logging.info('late quest process')
-            _process_late_quest(quest_list)
+            try:
+                quest_list = self.driver.find_element_by_id('questTodoListDialog')
+            except NoSuchElementException:
+                logging.info('early quest process')
+                _process_early_quest()
+            else:
+                logging.info('late quest process')
+                _process_late_quest(quest_list)
+
+        # complete daily
+        try:
+            quest_button = self.driver.find_element_by_class_name('questButtonOverviewAchievements')
+            quest_button.click()
+        except NoSuchElementException:
+            logging.warning('not found daily quest button')
+        else:
+            try:
+                reward_elem = self.driver.find_element_by_xpath('//div[@id="achievementRewardList"]'
+                                                                '//div[contains(@class, "rewardReady")]')
+                reward_elem.click()
+                custom_wait()
+                reward_button = self.driver.find_element_by_xpath('//button[contains(@class, "questButtonGainReward")]')
+                reward_button.click()
+                logging.info('daily quest complete')
+            except NoSuchElementException:
+                logging.info('not found daily reward')
+
+
+
+
+
 
     def _login(self):
         logging.info('login call')
@@ -472,8 +494,9 @@ class Manager(object):
                 # ignore if currently attacked
                 if config.FARM_LIST_ALREADY_ATTACK_PATTERN in raw_content:
                     continue
+
                 # ignore if last raid was loses
-                if config.FARM_LIST_WON_PATTERN not in raw_content:
+                if config.FARM_LIST_LOSSES_PATTERN1 in raw_content or config.FARM_LIST_LOSSES_PATTERN2 in raw_content:
                     continue
                 checkbox_elem = tr.find_element_by_xpath('.//input[@type="checkbox"]')
                 checkbox_elem.click()
