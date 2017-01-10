@@ -21,16 +21,16 @@ https://chromedriver.storage.googleapis.com/index.html
 
 ##### TODO
 - check summary population of player for select new farms
-
+- авто просмотр репортов о успешном грабеже без потерь
 - save cookie for next run
 - fix all attacked list case
 
 - строим войска
 - развиваем деревню и поля по конфигу
 
-- translate here
 - add template for local config
 
+- загонять ресы в войска с обменом, если до напа осталось меньше часа
 - нотифаим если идёт атака (смс?)
 - separate action log
 - screenshots for exceptions

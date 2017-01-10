@@ -169,10 +169,20 @@ class Manager(object):
 
     def _sanitizing(self):
         for close in self.driver.find_elements_by_id('dialogCancelButton'):
-            close.click()
-        self.driver.get(self.MAIN_PAGE)
+            try:
+                close.click()
+            except:
+                pass
+        try:
+            self.driver.get(self.MAIN_PAGE)
+        except:
+            pass
+
         for close in self.driver.find_elements_by_id('dialogCancelButton'):
-            close.click()
+            try:
+                close.click()
+            except:
+                pass
 
     def _quest_complete(self):
         logging.info('complete quest call')
@@ -239,11 +249,6 @@ class Manager(object):
                 logging.info('daily quest complete')
             except NoSuchElementException:
                 logging.info('not found daily reward')
-
-
-
-
-
 
     def _login(self):
         logging.info('login call')
@@ -440,6 +445,29 @@ class Manager(object):
                 return list_element.get_attribute('id')
         return None
 
+    def __find_farmlist_for_add(self, title_pattern):
+        while True:
+            id = self.__search_farmlist_id_by_title(title_pattern)
+            if not id:
+                self.__create_farm_list(title_pattern)
+                send_desktop_notify('create new farm list %s' % title_pattern)
+                id = self.__search_farmlist_id_by_title(title_pattern)
+                return id, title_pattern
+
+            free_slot_elem = self.__search_farmlist_by_id(id).find_element_by_xpath(
+                './/div[@class="addSlot"]/span[@class="raidListSlotCount"]')
+
+            counter = str(free_slot_elem.text)
+            logging.info('counter %s', counter)
+            usage = int(re.findall(r'(\d+)', counter)[0])
+            total = int(re.findall(r'(\d+)', counter)[1])
+            logging.info('counter %s %s', usage, total)
+            if usage < total:
+                return id, title_pattern
+
+            logging.info('list is full - next loop')
+            title_pattern += '_'
+
     def __extract_exist_villages_from_farmlist(self):
         res = []
         slots = self.driver.find_elements_by_xpath('//tr[@class="slotRow"]')
@@ -481,36 +509,41 @@ class Manager(object):
         logging.info('fetch farm list ids %s rand', farm_list_ids)
         for id in farm_list_ids:
             logging.info('process farm list id %s', id)
-
-            logging.info('sort list')
-            sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath('.//td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
-            sort_column.click()
-            custom_wait()
-
-            logging.info('select villages')
-            slots = self.__search_farmlist_by_id(id).find_elements_by_class_name('slotRow')
-            for tr in slots:
-                raw_content = tr.get_attribute('innerHTML')
-                # ignore if currently attacked
-                if config.FARM_LIST_ALREADY_ATTACK_PATTERN in raw_content:
-                    continue
-
-                # ignore if last raid was loses
-                if config.FARM_LIST_LOSSES_PATTERN1 in raw_content or config.FARM_LIST_LOSSES_PATTERN2 in raw_content:
-                    continue
-                checkbox_elem = tr.find_element_by_xpath('.//input[@type="checkbox"]')
-                checkbox_elem.click()
-
-            logging.info('send farm')
-            button = self.__search_farmlist_by_id(id).find_element_by_xpath('.//button[contains(@value, "%s")]' % config.FARM_LIST_SEND_BUTTON_PATTERN)
-            button.click()
-            custom_wait()
-
             try:
-                result = self.__search_farmlist_by_id(id).find_element_by_xpath('.//p[contains(text(), "%s")]' % config.FARM_LIST_SEND_RESULT_PATTERN)
-                logging.info('result message is %s', result.text)
-            except NoSuchElementException:
-                logging.warning('not found result message')
+                logging.info('sort list')
+                sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath('.//td[contains(@class, "distance") and contains(@class, "sortable")]')
+                sort_column.click()
+                custom_wait()
+                sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath('.//td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
+                sort_column.click()
+                custom_wait()
+
+                logging.info('select villages')
+                slots = self.__search_farmlist_by_id(id).find_elements_by_class_name('slotRow')
+                for tr in slots:
+                    raw_content = tr.get_attribute('innerHTML')
+                    # ignore if currently attacked
+                    if config.FARM_LIST_ALREADY_ATTACK_PATTERN in raw_content:
+                        continue
+
+                    # ignore if last raid was loses
+                    if config.FARM_LIST_LOSSES_PATTERN1 in raw_content or config.FARM_LIST_LOSSES_PATTERN2 in raw_content:
+                        continue
+                    checkbox_elem = tr.find_element_by_xpath('.//input[@type="checkbox"]')
+                    checkbox_elem.click()
+
+                logging.info('send farm')
+                button = self.__search_farmlist_by_id(id).find_element_by_xpath('.//button[contains(@value, "%s")]' % config.FARM_LIST_SEND_BUTTON_PATTERN)
+                button.click()
+                custom_wait()
+
+                try:
+                    result = self.__search_farmlist_by_id(id).find_element_by_xpath('.//p[contains(text(), "%s")]' % config.FARM_LIST_SEND_RESULT_PATTERN)
+                    logging.info('result message is %s', result.text)
+                except NoSuchElementException:
+                    logging.warning('not found result message')
+            except Exception as e:
+                logging.error('send farms exception %s', e)
 
     def _find_rally_point(self):
         self.driver.get(self.VILLAGE_PAGE)
@@ -536,7 +569,9 @@ class Manager(object):
         exist_villages = self.__extract_exist_villages_from_farmlist()
         logging.info('found %d already exist villages', len(exist_villages))
 
-        for conf in config.AUTO_COLLECT_FARM_LISTS:
+        lists = config.AUTO_COLLECT_FARM_LISTS
+        # random.shuffle(lists)
+        for conf in lists:
             logging.info('process farm collect config %s', conf)
 
             # click map
@@ -575,20 +610,13 @@ class Manager(object):
             if not self._goto_farmlist():
                 continue
 
-            id = self.__search_farmlist_id_by_title(conf['list_name'])
-            if not id:
-                self.__create_farm_list(conf['list_name'])
-                send_desktop_notify('create new farm list %s' % conf['list_name'])
-                id = self.__search_farmlist_id_by_title(conf['list_name'])
-
-            logging.info('farm list id %s', id)
-            if not id:
-                raise RuntimeError('not found farm list')
-
             for p in players_filter:
+                id, title = self.__find_farmlist_for_add(conf['list_name'])
+                if not id:
+                    raise RuntimeError('not found farm list')
                 self.__add_to_farm_list(id, p, conf['troop_id'], conf['troop_count'])
                 mask = unique_village_mask(p['v_name'], p['x'], p['y'])
-                logging.info('add player to farm %s', mask)
+                logging.info('add player to farm %s %s', mask, title)
                 exist_villages.add(mask)
                 send_desktop_notify('add player to farm %s' % p['v_name'])
 
@@ -631,6 +659,7 @@ class Manager(object):
         troop_input.send_keys(str(troop_count))
 
         form.find_element_by_id('save').click()
+        custom_wait()
 
     def _trading(self):
         if not config.AUCTION_BIDS:
