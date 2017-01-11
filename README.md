@@ -22,6 +22,7 @@ https://chromedriver.storage.googleapis.com/index.html
 ##### TODO
 - check summary population of player for select new farms
 - авто просмотр репортов о успешном грабеже без потерь
+- improve hero on nature
 - save cookie for next run
 - fix all attacked list case
 

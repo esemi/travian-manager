@@ -557,8 +557,8 @@ class Manager(object):
         return None
 
     def _update_farm_lists(self):
-        # if self.loop_number > 1:
-        #     return
+        if self.loop_number != 1 or not float(self.loop_number) % 50:
+            return
 
         logging.info('process autofill farm list')
         res = self._goto_farmlist()
@@ -570,7 +570,7 @@ class Manager(object):
         logging.info('found %d already exist villages', len(exist_villages))
 
         lists = config.AUTO_COLLECT_FARM_LISTS
-        # random.shuffle(lists)
+        random.shuffle(lists)
         for conf in lists:
             logging.info('process farm collect config %s', conf)
 
