@@ -9,6 +9,7 @@ import random
 import re
 from shlex import quote
 
+import lxml.html as l
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.ui import Select
@@ -79,6 +80,20 @@ def extract_players_from_source(source):
     return result
 
 
+def extract_free_oases_from_source(source):
+    map_dict = loads(source)
+    oases = [(int(i['x']), int(i['y'])) for i in map_dict['response']['data']['tiles']
+             if 'd' in i and 't' in i and 'u' not in i and i['d'] == -1 and ('25%' in i['t'] or '50%' in i['t'])]
+    return oases
+
+
+def extract_oases_enemies_from_source(source):
+    map_dict = loads(source)
+    document = l.fromstring(map_dict['response']['data']['html'].strip())
+    troop_rows = document.xpath('//table[@id="troop_info"]//td[@class="val"]/text()')
+    return sum([int(i.strip()) for i in troop_rows])
+
+
 class Manager(object):
 
     RUN_TIMEOUT = 10 * 60
@@ -90,6 +105,7 @@ class Manager(object):
     AUCTION_PAGE = config.HOST + '/hero.php?t=4&action=buy'
     MAP_PAGE = config.HOST + '/karte.php'
     MAP_DATA_PAGE = config.HOST + '/ajax.php?cmd=mapPositionData'
+    TILE_DATA_PAGE = config.HOST + '/ajax.php?cmd=viewTileDetails'
 
     loop_number = 0
     is_logged = False
@@ -132,6 +148,13 @@ class Manager(object):
                     self._send_hero_to_adventures()
                 except Exception as e:
                     logging.error('adventures process exception %s', e)
+
+            if config.ENABLE_HERO_TERROR:
+                # отправляем героя на прокачку в джунгли
+                try:
+                    self._send_hero_to_nature()
+                except Exception as e:
+                    logging.error('hero terror process exception %s', e)
 
             if config.ENABLE_QUEST_COMPLETE:
                 # забираем награды за квесты
@@ -389,6 +412,77 @@ class Manager(object):
             except NoSuchElementException:
                 logging.info('send to adventure not available')
 
+    def _send_hero_to_nature(self):
+        logging.info('send hero to terror call')
+        if not self.hero_hp > config.HERO_HP_THRESHOLD_FOR_TERROR:
+            logging.info('hero hp is smaller than threshold %s', self.hero_hp)
+            return
+
+        # check hero on home
+        self.driver.get(self.HERO_PAGE)
+        status_elem = self.driver.find_element_by_xpath('//div[contains(@class, "heroStatusMessage")]/span')
+        if config.HERO_ON_HOME_PATTERN not in status_elem.text:
+            logging.info('hero not on home - pass (%s)', status_elem.text)
+            return
+
+        village_name = status_elem.find_element_by_xpath('.//a').text.strip()
+        logging.info('hero village %s', village_name)
+
+        # select village
+        village_link_elem = self.driver.find_element_by_xpath('//div[@id="sidebarBoxVillagelist"]//li//a'
+                                                              '/div[@class="name" and contains(text(), "%s")]'
+                                                              '/parent::a' % village_name)
+        village_x = village_link_elem.find_element_by_class_name('coordinateX').get_attribute('innerHTML')
+        village_x = int(re.findall(r'(-?\d+)', village_x)[0])
+
+        village_y = village_link_elem.find_element_by_class_name('coordinateY').get_attribute('innerHTML')
+        village_y = int(re.findall(r'(-?\d+)', village_y)[0])
+
+        logging.info('hero village link %s %s %s', village_link_elem.get_property('href'), village_x, village_y)
+        village_link_elem.click()
+        custom_wait()
+
+        # get all free oases
+        source = self.__extract_map_data(village_x, village_y)
+        oases = extract_free_oases_from_source(source)
+        logging.info('found %d free oases', len(oases))
+
+        # select first not empty oasis
+        random.shuffle(oases)
+        logging.info('minimum enemies is %s', config.HERO_TERROR_MIN_ENEMIES)
+        selected_coords = None
+        for i in oases:
+            logging.info('oases %s check', i)
+            tile_info_source = self.__get_tile_info(*i)
+            count = extract_oases_enemies_from_source(tile_info_source)
+            logging.info('enemies %d', count)
+            if count >= config.HERO_TERROR_MIN_ENEMIES:
+                selected_coords = i
+                break
+
+        if not selected_coords:
+            logging.warning('not found full oasis?')
+            return
+
+        # todo send hero to selected oasis
+        res = self._goto_sendarmy()
+        if not res:
+            logging.warning('not found send army tab')
+            return
+
+        logging.info('send hero to %s', selected_coords)
+        form_elem = self.driver.find_element_by_xpath('//form[@name="snd"]')
+        form_elem.find_element_by_xpath('.//input[@name="t11"]').send_keys(1)
+        form_elem.find_element_by_id('xCoordInput').send_keys(selected_coords[0])
+        form_elem.find_element_by_id('yCoordInput').send_keys(selected_coords[1])
+        form_elem.find_element_by_xpath('.//div[@class="option"]//input[@value="4"]').click()
+        form_elem.submit()
+        custom_wait()
+
+        logging.info('confirm send')
+        self.driver.find_element_by_class_name('rallyPointConfirm').click()
+        custom_wait()
+
     def _get_resource_buildings(self):
         self.driver.get(self.MAIN_PAGE)
         map_content = self.driver.find_element_by_id('rx')
@@ -430,6 +524,20 @@ class Manager(object):
         farm_list_tab = self.driver.find_element_by_xpath(
             '//a[@class="tabItem" and contains(text(), "%s")]' % config.FARM_LIST_TAB_PATTERN)
         farm_list_tab.click()
+        custom_wait()
+        return True
+
+    def _goto_sendarmy(self):
+        rally_point_href = self._find_rally_point()
+        logging.debug('found rally point href %s', rally_point_href)
+        if not rally_point_href:
+            logging.warning('not found rally point')
+            return False
+
+        self.driver.get(rally_point_href)
+        send_army_tab = self.driver.find_element_by_xpath(
+            '//a[@class="tabItem" and contains(text(), "%s")]' % config.SEND_ARMY_TAB_PATTERN)
+        send_army_tab.click()
         custom_wait()
         return True
 
@@ -520,6 +628,7 @@ class Manager(object):
 
                 logging.info('select villages')
                 slots = self.__search_farmlist_by_id(id).find_elements_by_class_name('slotRow')
+                selected = False
                 for tr in slots:
                     raw_content = tr.get_attribute('innerHTML')
                     # ignore if currently attacked
@@ -531,12 +640,16 @@ class Manager(object):
                         continue
                     checkbox_elem = tr.find_element_by_xpath('.//input[@type="checkbox"]')
                     checkbox_elem.click()
+                    selected = True
+
+                if not selected:
+                    logging.info('not found raids')
+                    continue
 
                 logging.info('send farm')
                 button = self.__search_farmlist_by_id(id).find_element_by_xpath('.//button[contains(@value, "%s")]' % config.FARM_LIST_SEND_BUTTON_PATTERN)
                 button.click()
                 custom_wait()
-
                 try:
                     result = self.__search_farmlist_by_id(id).find_element_by_xpath('.//p[contains(text(), "%s")]' % config.FARM_LIST_SEND_RESULT_PATTERN)
                     logging.info('result message is %s', result.text)
@@ -556,6 +669,55 @@ class Manager(object):
                 return str(b.get_attribute('href'))
         return None
 
+    def __extract_map_data(self, x: int, y: int):
+        """emulate ajax request for fetch response with selenium"""
+        self.driver.get(self.MAP_PAGE)
+        custom_wait()
+
+        form_html = """
+            <form id="randomFormId" method="POST" action="%s">
+                <input type="text" name="cmd" value="mapPositionData"></input>
+                <input type="text" name="data[x]" value="%d"></input>
+                <input type="text" name="data[y]" value="%d"></input>
+                <input type="text" name="data[zoomLevel]" value="3"></input>
+                <input type="text" name="ajaxToken" value="%s"></input>
+                <input type="submit"/>
+            </form>
+            """ % (self.MAP_DATA_PAGE, x, y, self.ajax_token)
+        elem = self.driver.find_element_by_tag_name('body')
+        script = "arguments[0].innerHTML += '%s';" % form_html.replace("\n", '')
+        logging.debug(script)
+
+        self.driver.execute_script(script, elem)
+        my_form = self.driver.find_element_by_id('randomFormId')
+        my_form.submit()
+        custom_wait()
+        return self.driver.find_element_by_tag_name('pre').text
+
+    def __get_tile_info(self, x: int, y: int):
+        """emulate ajax request for fetch oasis info"""
+        self.driver.get(self.MAP_PAGE)
+        custom_wait()
+
+        form_html = """
+                <form id="randomFormId" method="POST" action="%s">
+                    <input type="text" name="cmd" value="viewTileDetails"></input>
+                    <input type="text" name="x" value="%d"></input>
+                    <input type="text" name="y" value="%d"></input>
+                    <input type="text" name="ajaxToken" value="%s"></input>
+                    <input type="submit"/>
+                </form>
+                """ % (self.TILE_DATA_PAGE, x, y, self.ajax_token)
+        elem = self.driver.find_element_by_tag_name('body')
+        script = "arguments[0].innerHTML += '%s';" % form_html.replace("\n", '')
+        logging.debug(script)
+
+        self.driver.execute_script(script, elem)
+        my_form = self.driver.find_element_by_id('randomFormId')
+        my_form.submit()
+        custom_wait()
+        return self.driver.find_element_by_tag_name('pre').text
+
     def _update_farm_lists(self):
         if self.loop_number != 1 or not float(self.loop_number) % 50:
             return
@@ -574,31 +736,8 @@ class Manager(object):
         for conf in lists:
             logging.info('process farm collect config %s', conf)
 
-            # click map
-            self.driver.get(self.MAP_PAGE)
-            custom_wait()
-
-            # emulate ajax request for fetch response with selenium
-            form_html = """
-            <form id="randomFormId" method="POST" action="%s">
-                <input type="text" name="cmd" value="mapPositionData"></input>
-                <input type="text" name="data[x]" value="%d"></input>
-                <input type="text" name="data[y]" value="%d"></input>
-                <input type="text" name="data[zoomLevel]" value="3"></input>
-                <input type="text" name="ajaxToken" value="%s"></input>
-                <input type="submit"/>
-            </form>
-            """ % (self.MAP_DATA_PAGE, conf['center_x'], conf['center_y'], self.ajax_token)
-            elem = self.driver.find_element_by_tag_name('body')
-            script = "arguments[0].innerHTML += '%s';" % form_html.replace("\n", '')
-            logging.debug(script)
-
-            self.driver.execute_script(script, elem)
-            my_form = self.driver.find_element_by_id('randomFormId')
-            my_form.submit()
-            custom_wait()
-
-            players = extract_players_from_source(self.driver.find_element_by_tag_name('pre').text)
+            source = self.__extract_map_data(conf['center_x'], conf['center_y'])
+            players = extract_players_from_source(source)
             logging.info('found %d players', len(players))
 
             players_filter = apply_players_filter(players, conf, exist_villages)

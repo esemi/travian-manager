@@ -17,14 +17,15 @@ https://chromedriver.storage.googleapis.com/index.html
 - обновлять списки фарма (игнорирует уже добавленные в какой-либо список деревни)
 - покупать лоты на ауке
 - оповещать на десктоп о своих действиях
+- качать героя на оазисах
 
 
 ##### TODO
-- check summary population of player for select new farms
 - авто просмотр репортов о успешном грабеже без потерь
-- improve hero on nature
+- check summary population of player for select new farms
 - save cookie for next run
 - fix all attacked list case
+- select farm list by in condition
 
 - строим войска
 - развиваем деревню и поля по конфигу
