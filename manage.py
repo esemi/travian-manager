@@ -142,43 +142,43 @@ class Manager(object):
             # анализируем деревню
             self._analyze()
 
+            # отправляем героя в приключения
             if config.ENABLE_ADVENTURES:
-                # отправляем героя в приключения
                 try:
                     self._send_hero_to_adventures()
                 except Exception as e:
                     logging.error('adventures process exception %s', e)
 
+            # отправляем героя на прокачку в джунгли
             if config.ENABLE_HERO_TERROR:
-                # отправляем героя на прокачку в джунгли
                 try:
                     self._send_hero_to_nature()
                 except Exception as e:
                     logging.error('hero terror process exception %s', e)
 
+            # забираем награды за квесты
             if config.ENABLE_QUEST_COMPLETE:
-                # забираем награды за квесты
                 try:
                     self._quest_complete()
                 except Exception as e:
                     logging.error('quests process exception %s', e)
 
+            # шлём пылесосы по фарм листам
             if config.ENABLE_SEND_FARMS:
-                # шлём пылесосы по фарм листам
                 try:
                     self._send_army_to_farm()
                 except Exception as e:
                     logging.error('farm send process exception %s', e)
 
+            # торгуем (пока только покупаем)
             if config.ENABLE_TRADE:
-                # торгуем (пока только покупаем)
                 try:
                     self._trading()
                 except Exception as e:
                     logging.error('trade process exception %s', e)
 
+            # добавляем цели в фарм лист
             if config.ENABLE_UPDATE_FARMS:
-                # добавляем цели в фарм лист
                 try:
                     self._update_farm_lists()
                 except Exception as e:
@@ -288,7 +288,12 @@ class Manager(object):
         except:
             logging.info('login not success')
 
-        ajax_token = self._parse_ajax_token()
+        def _parse_ajax_token(source):
+            token_line = [i for i in source.split("\n") if 'ajaxToken' in i][0].strip()
+            logging.debug(token_line)
+            return token_line[-34:-2]
+
+        ajax_token = _parse_ajax_token(self.driver.page_source)
         logging.info('get ajax token %s', ajax_token)
         if not ajax_token:
             raise RuntimeError('ajax token not found')
@@ -297,87 +302,8 @@ class Manager(object):
     def _analyze(self):
         logging.info('analyze call')
 
-        # analyze resource buildings
-        # self._analyze_resource_buildings()
-        #
-        # # analyze resource input
-        # self._analyze_resource_production()
-        #
-        # # analyze resource stock
-        # self._analyze_resource_stock()
-
-        # analyze buildings queue
-        # self._analyze_buildings_queue()
-
         # analyze hero
         self._analyze_hero()
-
-    def _analyze_resource_buildings(self):
-        result_builds = self._get_resource_buildings()
-        logging.info('found %d resource buildings', len(result_builds))
-        logging.debug(result_builds)
-        self.resource_buildings = result_builds
-
-    def _analyze_resource_production(self):
-        self.driver.get(self.MAIN_PAGE)
-        table = self.driver.find_element_by_id('production')
-        result_production = {}
-        for row in table.find_elements_by_tag_name('tr')[1:]:
-            title = str(row.find_element_by_class_name('res').text)
-            value = str(row.find_element_by_class_name('num').text).strip()
-            value = int(re.findall(r'([-]?\d+)', value)[0])
-            logging.debug('production %s %d', title, value)
-            type = None
-            if config.RESOURCE_CLAY_NAME in title:
-                type = config.RESOURCE_CLAY
-            elif config.RESOURCE_FOOD_NAME in title:
-                type = config.RESOURCE_FOOD
-            elif config.RESOURCE_WOOD_NAME in title:
-                type = config.RESOURCE_WOOD
-            elif config.RESOURCE_IRON_NAME in title:
-                type = config.RESOURCE_IRON
-            result_production[type] = value
-        logging.info('resource production %s', result_production)
-        assert len(result_production) == 4
-        self.resource_production = result_production
-
-    def _analyze_resource_stock(self):
-        self.driver.get(self.MAIN_PAGE)
-        stock_list = self.driver.find_element_by_id('stockBar')
-
-        def _get_resource_type(title):
-            if config.RESOURCE_CLAY_NAME in title:
-                return config.RESOURCE_CLAY
-            elif config.RESOURCE_FOOD_NAME in title:
-                return config.RESOURCE_FOOD
-            elif config.RESOURCE_WOOD_NAME in title:
-                return config.RESOURCE_WOOD
-            elif config.RESOURCE_IRON_NAME in title:
-                return config.RESOURCE_IRON
-            return config.RESOURCE_FOOD_FREE
-
-        result_stock = {}
-        for row in stock_list.find_elements_by_xpath('.//li[contains(@class,"stockBarButton")]'):
-            title = str(row.find_element_by_tag_name('img').get_attribute('alt')).strip()
-            value = str(row.find_element_by_xpath('.//span[contains(@class, "value")]').text).strip()
-            value = int(re.findall(r'(\d+)', value)[0])
-            logging.debug('stock %s %d', title, value)
-            res_type = _get_resource_type(title)
-            result_stock[res_type] = value
-        logging.info('resource stock %s', result_stock)
-        assert len(result_stock) == 5
-        self.resource_stock = result_stock
-
-    def _analyze_buildings_queue(self):
-        self.driver.get(self.MAIN_PAGE)
-        try:
-            div = self.driver.find_element_by_class_name('buildingList')
-            cnt = len(div.find_elements_by_class_name('buildDuration'))
-        except NoSuchElementException:
-            cnt = 0
-
-        self.build_queue_slots = max(0, config.BUILD_QUEUE_SLOTS_LIMIT - cnt)
-        logging.info('build queue free slots %d', self.build_queue_slots)
 
     def _analyze_hero(self):
         self.driver.get(self.HERO_PAGE)
@@ -465,7 +391,7 @@ class Manager(object):
             return
 
         # todo send hero to selected oasis
-        res = self._goto_sendarmy()
+        res = self.__goto_sendarmy_tab()
         if not res:
             logging.warning('not found send army tab')
             return
@@ -483,125 +409,12 @@ class Manager(object):
         self.driver.find_element_by_class_name('rallyPointConfirm').click()
         custom_wait()
 
-    def _get_resource_buildings(self):
-        self.driver.get(self.MAIN_PAGE)
-        map_content = self.driver.find_element_by_id('rx')
-        builds = map_content.find_elements_by_tag_name('area')
-        result_builds = []
-        for b in builds:
-            b_desc = str(b.get_attribute('alt'))
-            logging.debug('analyze resource build %s', b_desc)
-            if not config.RESOURCE_BUILD_PATTERN_LEVEL in b_desc:
-                continue
-            b_href = str(b.get_attribute('href'))
-            b_id = re.findall(r'id=(\d+)', b_href)[0]
-            b_level = re.findall(r'%s (\d+)' % config.RESOURCE_BUILD_PATTERN_LEVEL, str(b_desc))[0]
-            b_type = None
-            if config.RESOURCE_WOOD_MINE in b_desc:
-                b_type = config.RESOURCE_WOOD
-            elif config.RESOURCE_FOOD_MINE in b_desc:
-                b_type = config.RESOURCE_FOOD
-            elif config.RESOURCE_IRON_MINE in b_desc:
-                b_type = config.RESOURCE_IRON
-            elif config.RESOURCE_CLAY_MINE in b_desc:
-                b_type = config.RESOURCE_CLAY
-            result_builds.append({
-                'id': int(b_id),
-                'desc': b_desc,
-                'type': b_type,
-                'level': int(b_level),
-                'href': b_href
-            })
-        return result_builds
-
-    def _goto_farmlist(self):
-        rally_point_href = self._find_rally_point()
-        logging.debug('found rally point href %s', rally_point_href)
-        if not rally_point_href:
-            logging.warning('not found rally point')
-            return False
-        self.driver.get(rally_point_href)
-        farm_list_tab = self.driver.find_element_by_xpath(
-            '//a[@class="tabItem" and contains(text(), "%s")]' % config.FARM_LIST_TAB_PATTERN)
-        farm_list_tab.click()
-        custom_wait()
-        return True
-
-    def _goto_sendarmy(self):
-        rally_point_href = self._find_rally_point()
-        logging.debug('found rally point href %s', rally_point_href)
-        if not rally_point_href:
-            logging.warning('not found rally point')
-            return False
-
-        self.driver.get(rally_point_href)
-        send_army_tab = self.driver.find_element_by_xpath(
-            '//a[@class="tabItem" and contains(text(), "%s")]' % config.SEND_ARMY_TAB_PATTERN)
-        send_army_tab.click()
-        custom_wait()
-        return True
-
-    def __search_farmlist_by_id(self, id):
-        return self.driver.find_element_by_xpath('//div[@id="%s"]' % id)
-
-    def __search_farmlist_id_by_title(self, title_pattern):
-        farm_lists = self.driver.find_elements_by_xpath('//div[@id="raidList"]/div[contains(@class, "listEntry")]')
-        for list_element in farm_lists:
-            title = list_element.find_element_by_class_name('listTitleText').text
-            logging.debug('search farm list %s', title)
-            if title_pattern in title:
-                return list_element.get_attribute('id')
-        return None
-
-    def __find_farmlist_for_add(self, title_pattern):
-        while True:
-            id = self.__search_farmlist_id_by_title(title_pattern)
-            if not id:
-                self.__create_farm_list(title_pattern)
-                send_desktop_notify('create new farm list %s' % title_pattern)
-                id = self.__search_farmlist_id_by_title(title_pattern)
-                return id, title_pattern
-
-            free_slot_elem = self.__search_farmlist_by_id(id).find_element_by_xpath(
-                './/div[@class="addSlot"]/span[@class="raidListSlotCount"]')
-
-            counter = str(free_slot_elem.text)
-            logging.info('counter %s', counter)
-            usage = int(re.findall(r'(\d+)', counter)[0])
-            total = int(re.findall(r'(\d+)', counter)[1])
-            logging.info('counter %s %s', usage, total)
-            if usage < total:
-                return id, title_pattern
-
-            logging.info('list is full - next loop')
-            title_pattern += '_'
-
-    def __extract_exist_villages_from_farmlist(self):
-        res = []
-        slots = self.driver.find_elements_by_xpath('//tr[@class="slotRow"]')
-        for tr in slots:
-            try:
-                el = tr.find_element_by_class_name('village').find_element_by_tag_name('a')
-                v_name = el.text
-            except NoSuchElementException:
-                continue
-
-            try:
-                x = int(re.findall(r'x=([-]?\d+)', el.get_attribute('href'))[0])
-                y = int(re.findall(r'y=([-]?\d+)', el.get_attribute('href'))[0])
-            except IndexError:
-                logging.warning('invalid farmlist slot %s', v_name)
-                continue
-
-            res.append(unique_village_mask(v_name, x, y))
-        return set(res)
-
     def _send_army_to_farm(self):
         if not config.AUTO_FARM_LISTS:
             logging.info('not found farm list for automate')
             return
 
-        res = self._goto_farmlist()
+        res = self.__goto_farmlist()
         if not res:
             return
 
@@ -619,10 +432,12 @@ class Manager(object):
             logging.info('process farm list id %s', id)
             try:
                 logging.info('sort list')
-                sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath('.//td[contains(@class, "distance") and contains(@class, "sortable")]')
+                sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
+                    './/td[contains(@class, "distance") and contains(@class, "sortable")]')
                 sort_column.click()
                 custom_wait()
-                sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath('.//td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
+                sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
+                    './/td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
                 sort_column.click()
                 custom_wait()
 
@@ -647,83 +462,25 @@ class Manager(object):
                     continue
 
                 logging.info('send farm')
-                button = self.__search_farmlist_by_id(id).find_element_by_xpath('.//button[contains(@value, "%s")]' % config.FARM_LIST_SEND_BUTTON_PATTERN)
+                button = self.__search_farmlist_by_id(id).find_element_by_xpath(
+                    './/button[contains(@value, "%s")]' % config.FARM_LIST_SEND_BUTTON_PATTERN)
                 button.click()
                 custom_wait()
                 try:
-                    result = self.__search_farmlist_by_id(id).find_element_by_xpath('.//p[contains(text(), "%s")]' % config.FARM_LIST_SEND_RESULT_PATTERN)
+                    result = self.__search_farmlist_by_id(id).find_element_by_xpath(
+                        './/p[contains(text(), "%s")]' % config.FARM_LIST_SEND_RESULT_PATTERN)
                     logging.info('result message is %s', result.text)
                 except NoSuchElementException:
                     logging.warning('not found result message')
             except Exception as e:
                 logging.error('send farms exception %s', e)
 
-    def _find_rally_point(self):
-        self.driver.get(self.VILLAGE_PAGE)
-        map_content = self.driver.find_element_by_id('village_map')
-        builds = map_content.find_elements_by_tag_name('area')
-        for b in builds:
-            b_desc = str(b.get_attribute('alt'))
-            logging.debug('analyze build %s', b_desc)
-            if config.FARM_LIST_BUILDING_PATTERN in b_desc:
-                return str(b.get_attribute('href'))
-        return None
-
-    def __extract_map_data(self, x: int, y: int):
-        """emulate ajax request for fetch response with selenium"""
-        self.driver.get(self.MAP_PAGE)
-        custom_wait()
-
-        form_html = """
-            <form id="randomFormId" method="POST" action="%s">
-                <input type="text" name="cmd" value="mapPositionData"></input>
-                <input type="text" name="data[x]" value="%d"></input>
-                <input type="text" name="data[y]" value="%d"></input>
-                <input type="text" name="data[zoomLevel]" value="3"></input>
-                <input type="text" name="ajaxToken" value="%s"></input>
-                <input type="submit"/>
-            </form>
-            """ % (self.MAP_DATA_PAGE, x, y, self.ajax_token)
-        elem = self.driver.find_element_by_tag_name('body')
-        script = "arguments[0].innerHTML += '%s';" % form_html.replace("\n", '')
-        logging.debug(script)
-
-        self.driver.execute_script(script, elem)
-        my_form = self.driver.find_element_by_id('randomFormId')
-        my_form.submit()
-        custom_wait()
-        return self.driver.find_element_by_tag_name('pre').text
-
-    def __get_tile_info(self, x: int, y: int):
-        """emulate ajax request for fetch oasis info"""
-        self.driver.get(self.MAP_PAGE)
-        custom_wait()
-
-        form_html = """
-                <form id="randomFormId" method="POST" action="%s">
-                    <input type="text" name="cmd" value="viewTileDetails"></input>
-                    <input type="text" name="x" value="%d"></input>
-                    <input type="text" name="y" value="%d"></input>
-                    <input type="text" name="ajaxToken" value="%s"></input>
-                    <input type="submit"/>
-                </form>
-                """ % (self.TILE_DATA_PAGE, x, y, self.ajax_token)
-        elem = self.driver.find_element_by_tag_name('body')
-        script = "arguments[0].innerHTML += '%s';" % form_html.replace("\n", '')
-        logging.debug(script)
-
-        self.driver.execute_script(script, elem)
-        my_form = self.driver.find_element_by_id('randomFormId')
-        my_form.submit()
-        custom_wait()
-        return self.driver.find_element_by_tag_name('pre').text
-
     def _update_farm_lists(self):
         if self.loop_number != 1 or not float(self.loop_number) % 50:
             return
 
         logging.info('process autofill farm list')
-        res = self._goto_farmlist()
+        res = self.__goto_farmlist()
         if not res:
             logging.warning('not found farm list link - pass')
             return
@@ -746,7 +503,7 @@ class Manager(object):
             if not players_filter:
                 continue
 
-            if not self._goto_farmlist():
+            if not self.__goto_farmlist():
                 continue
 
             for p in players_filter:
@@ -758,47 +515,6 @@ class Manager(object):
                 logging.info('add player to farm %s %s', mask, title)
                 exist_villages.add(mask)
                 send_desktop_notify('add player to farm %s' % p['v_name'])
-
-    def _parse_ajax_token(self):
-        source = self.driver.page_source
-        token_line = [i for i in source.split("\n") if 'ajaxToken' in i][0].strip()
-        logging.debug(token_line)
-        return token_line[-34:-2]
-
-    def __create_farm_list(self, list_name):
-        logging.info('create new farm list %s', list_name)
-        village_name, list_name = list_name.split(' - ')
-
-        self.driver.find_element_by_xpath('//div[@class="options"]/a[@class="arrow"]').click()
-        custom_wait()
-
-        create_elem = self.driver.find_element_by_id('raidListCreate')
-        create_elem.find_element_by_xpath('.//input[@name="listName"]').send_keys(list_name)
-
-        select = Select(create_elem.find_element_by_id('did'))
-        select.select_by_visible_text(village_name)
-
-        create_elem.find_element_by_xpath('.//button[@value="Create"]').click()
-        custom_wait()
-        self._goto_farmlist()
-
-    def __add_to_farm_list(self, id, p, troop_id, troop_count):
-        custom_wait()
-        self.__search_farmlist_by_id(id).find_element_by_xpath('.//div[@class="addSlot"]/button[@value="Add"]').click()
-        custom_wait()
-
-        form = self.driver.find_element_by_id('raidListSlot')
-        form.find_element_by_id('xCoordInput').clear()
-        form.find_element_by_id('xCoordInput').send_keys(p['x'])
-        form.find_element_by_id('yCoordInput').clear()
-        form.find_element_by_id('yCoordInput').send_keys(p['y'])
-
-        troop_input = form.find_element_by_xpath('.//input[@id="%s"]' % troop_id)
-        troop_input.clear()
-        troop_input.send_keys(str(troop_count))
-
-        form.find_element_by_id('save').click()
-        custom_wait()
 
     def _trading(self):
         if not config.AUCTION_BIDS:
@@ -876,6 +592,185 @@ class Manager(object):
                 custom_wait()
                 send_desktop_notify('trade: bid item %s by %d' % (item_name_str, bid))
                 self.driver.get(self.AUCTION_PAGE)
+
+
+    def __goto_farmlist(self):
+        rally_point_href = self.__find_rally_point_build()
+        logging.debug('found rally point href %s', rally_point_href)
+        if not rally_point_href:
+            logging.warning('not found rally point')
+            return False
+        self.driver.get(rally_point_href)
+        farm_list_tab = self.driver.find_element_by_xpath(
+            '//a[@class="tabItem" and contains(text(), "%s")]' % config.FARM_LIST_TAB_PATTERN)
+        farm_list_tab.click()
+        custom_wait()
+        return True
+
+    def __goto_sendarmy_tab(self):
+        rally_point_href = self.__find_rally_point_build()
+        logging.debug('found rally point href %s', rally_point_href)
+        if not rally_point_href:
+            logging.warning('not found rally point')
+            return False
+
+        self.driver.get(rally_point_href)
+        send_army_tab = self.driver.find_element_by_xpath(
+            '//a[@class="tabItem" and contains(text(), "%s")]' % config.SEND_ARMY_TAB_PATTERN)
+        send_army_tab.click()
+        custom_wait()
+        return True
+
+    def __search_farmlist_by_id(self, id):
+        return self.driver.find_element_by_xpath('//div[@id="%s"]' % id)
+
+    def __search_farmlist_id_by_title(self, title_pattern):
+        farm_lists = self.driver.find_elements_by_xpath('//div[@id="raidList"]/div[contains(@class, "listEntry")]')
+        for list_element in farm_lists:
+            title = list_element.find_element_by_class_name('listTitleText').text
+            logging.debug('search farm list %s', title)
+            if title_pattern in title:
+                return list_element.get_attribute('id')
+        return None
+
+    def __find_farmlist_for_add(self, title_pattern):
+        while True:
+            id = self.__search_farmlist_id_by_title(title_pattern)
+            if not id:
+                self.__create_farm_list(title_pattern)
+                send_desktop_notify('create new farm list %s' % title_pattern)
+                id = self.__search_farmlist_id_by_title(title_pattern)
+                return id, title_pattern
+
+            free_slot_elem = self.__search_farmlist_by_id(id).find_element_by_xpath(
+                './/div[@class="addSlot"]/span[@class="raidListSlotCount"]')
+
+            counter = str(free_slot_elem.text)
+            logging.info('counter %s', counter)
+            usage = int(re.findall(r'(\d+)', counter)[0])
+            total = int(re.findall(r'(\d+)', counter)[1])
+            logging.info('counter %s %s', usage, total)
+            if usage < total:
+                return id, title_pattern
+
+            logging.info('list is full - next loop')
+            title_pattern += '_'
+
+    def __extract_exist_villages_from_farmlist(self):
+        res = []
+        slots = self.driver.find_elements_by_xpath('//tr[@class="slotRow"]')
+        for tr in slots:
+            try:
+                el = tr.find_element_by_class_name('village').find_element_by_tag_name('a')
+                v_name = el.text
+            except NoSuchElementException:
+                continue
+
+            try:
+                x = int(re.findall(r'x=([-]?\d+)', el.get_attribute('href'))[0])
+                y = int(re.findall(r'y=([-]?\d+)', el.get_attribute('href'))[0])
+            except IndexError:
+                logging.warning('invalid farmlist slot %s', v_name)
+                continue
+
+            res.append(unique_village_mask(v_name, x, y))
+        return set(res)
+
+    def __find_rally_point_build(self):
+        self.driver.get(self.VILLAGE_PAGE)
+        map_content = self.driver.find_element_by_id('village_map')
+        builds = map_content.find_elements_by_tag_name('area')
+        for b in builds:
+            b_desc = str(b.get_attribute('alt'))
+            logging.debug('analyze build %s', b_desc)
+            if config.FARM_LIST_BUILDING_PATTERN in b_desc:
+                return str(b.get_attribute('href'))
+        return None
+
+    def __extract_map_data(self, x: int, y: int):
+        """emulate ajax request for fetch response with selenium"""
+        self.driver.get(self.MAP_PAGE)
+        custom_wait()
+
+        form_html = """
+            <form id="randomFormId" method="POST" action="%s">
+                <input type="text" name="cmd" value="mapPositionData"></input>
+                <input type="text" name="data[x]" value="%d"></input>
+                <input type="text" name="data[y]" value="%d"></input>
+                <input type="text" name="data[zoomLevel]" value="3"></input>
+                <input type="text" name="ajaxToken" value="%s"></input>
+                <input type="submit"/>
+            </form>
+            """ % (self.MAP_DATA_PAGE, x, y, self.ajax_token)
+        elem = self.driver.find_element_by_tag_name('body')
+        script = "arguments[0].innerHTML += '%s';" % form_html.replace("\n", '')
+        logging.debug(script)
+
+        self.driver.execute_script(script, elem)
+        my_form = self.driver.find_element_by_id('randomFormId')
+        my_form.submit()
+        custom_wait()
+        return self.driver.find_element_by_tag_name('pre').text
+
+    def __get_tile_info(self, x: int, y: int):
+        """emulate ajax request for fetch oasis info"""
+        self.driver.get(self.MAP_PAGE)
+        custom_wait()
+
+        form_html = """
+                <form id="randomFormId" method="POST" action="%s">
+                    <input type="text" name="cmd" value="viewTileDetails"></input>
+                    <input type="text" name="x" value="%d"></input>
+                    <input type="text" name="y" value="%d"></input>
+                    <input type="text" name="ajaxToken" value="%s"></input>
+                    <input type="submit"/>
+                </form>
+                """ % (self.TILE_DATA_PAGE, x, y, self.ajax_token)
+        elem = self.driver.find_element_by_tag_name('body')
+        script = "arguments[0].innerHTML += '%s';" % form_html.replace("\n", '')
+        logging.debug(script)
+
+        self.driver.execute_script(script, elem)
+        my_form = self.driver.find_element_by_id('randomFormId')
+        my_form.submit()
+        custom_wait()
+        return self.driver.find_element_by_tag_name('pre').text
+
+    def __create_farm_list(self, list_name):
+        logging.info('create new farm list %s', list_name)
+        village_name, list_name = list_name.split(' - ')
+
+        self.driver.find_element_by_xpath('//div[@class="options"]/a[@class="arrow"]').click()
+        custom_wait()
+
+        create_elem = self.driver.find_element_by_id('raidListCreate')
+        create_elem.find_element_by_xpath('.//input[@name="listName"]').send_keys(list_name)
+
+        select = Select(create_elem.find_element_by_id('did'))
+        select.select_by_visible_text(village_name)
+
+        create_elem.find_element_by_xpath('.//button[@value="Create"]').click()
+        custom_wait()
+        self.__goto_farmlist()
+
+    def __add_to_farm_list(self, id, p, troop_id, troop_count):
+        custom_wait()
+        self.__search_farmlist_by_id(id).find_element_by_xpath('.//div[@class="addSlot"]/button[@value="Add"]').click()
+        custom_wait()
+
+        form = self.driver.find_element_by_id('raidListSlot')
+        form.find_element_by_id('xCoordInput').clear()
+        form.find_element_by_id('xCoordInput').send_keys(p['x'])
+        form.find_element_by_id('yCoordInput').clear()
+        form.find_element_by_id('yCoordInput').send_keys(p['y'])
+
+        troop_input = form.find_element_by_xpath('.//input[@id="%s"]' % troop_id)
+        troop_input.clear()
+        troop_input.send_keys(str(troop_count))
+
+        form.find_element_by_id('save').click()
+        custom_wait()
+
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')

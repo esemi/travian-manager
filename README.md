@@ -21,11 +21,10 @@ https://chromedriver.storage.googleapis.com/index.html
 
 
 ##### TODO
-- авто просмотр репортов о успешном грабеже без потерь
+- авто удаление репортов о успешном грабеже без потерь
 - check summary population of player for select new farms
 - save cookie for next run
 - fix all attacked list case
-- select farm list by in condition
 
 - строим войска
 - развиваем деревню и поля по конфигу
