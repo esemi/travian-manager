@@ -3,12 +3,12 @@
 import os
 
 CHROME_DRIVER_PATH = os.path.sep.join([os.path.abspath(os.path.dirname(__file__)), 'chromedriver'])
-FIND_TIMEOUT = 10
-REQUEST_TIMEOUT = 25
-CUSTOM_WAIT_TIMEOUT = 5
+FIND_TIMEOUT = 15
+REQUEST_TIMEOUT = 45
+CUSTOM_WAIT_TIMEOUT = 15
 
 CREDS = ('login', 'pass')
-HOST = 'http://ts1.travian.ru'
+HOST = 'http://ts1.travian.com'
 
 RESOURCE_WOOD = 1
 RESOURCE_FOOD = 2
@@ -34,7 +34,7 @@ HERO_ON_HOME_PATTERN = 'Hero is currently in village'
 
 HERO_HP_THRESHOLD_FOR_ADVENTURE = 65
 HERO_HP_THRESHOLD_FOR_TERROR = 85
-HERO_TERROR_MIN_ENEMIES = 40
+HERO_TERROR_MIN_ENEMIES = 20
 
 FARM_LIST_SEND_BUTTON_PATTERN = 'Start raid'
 FARM_LIST_BUILDING_PATTERN = 'Rally Point'

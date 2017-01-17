@@ -306,13 +306,17 @@ class Manager(object):
         self._analyze_hero()
 
     def _analyze_hero(self):
-        self.driver.get(self.HERO_PAGE)
-        status_div = self.driver.find_element_by_id('attributes')
-        value = status_div.find_element_by_class_name('health')\
-            .find_element_by_xpath('.//td[contains(@class, "current")]').text.strip()
-        value = int(re.findall(r'(\d+)', str(value))[0])
-        self.hero_hp = max(100, value)
-        logging.info('hero HP percent %d', self.hero_hp)
+        try:
+            self.driver.get(self.HERO_PAGE)
+            status_div = self.driver.find_element_by_id('attributes')
+            value = status_div.find_element_by_class_name('health')\
+                .find_element_by_xpath('.//td[contains(@class, "current")]').text.strip()
+            value = int(re.findall(r'(\d+)', str(value))[0])
+            self.hero_hp = max(100, value)
+            logging.info('hero HP percent %d', self.hero_hp)
+        except:
+            logging.warning('hero analyze error')
+            self.hero_hp = 0
 
     def _send_hero_to_adventures(self):
         logging.info('send hero to adventure call')
@@ -339,8 +343,8 @@ class Manager(object):
                 logging.info('send to adventure not available')
 
     def _send_hero_to_nature(self):
-        logging.info('send hero to terror call')
-        if not self.hero_hp > config.HERO_HP_THRESHOLD_FOR_TERROR:
+        logging.info('send hero to terror call %s', self.hero_hp)
+        if self.hero_hp < config.HERO_HP_THRESHOLD_FOR_TERROR:
             logging.info('hero hp is smaller than threshold %s', self.hero_hp)
             return
 
@@ -586,7 +590,6 @@ class Manager(object):
                 self.driver.find_element_by_xpath('//div[@class="submitBid"]/button[@type="submit"]').click()
             except Exception as e:
                 logging.error(e)
-                i -= 1
             else:
                 logging.info('bid save')
                 custom_wait()

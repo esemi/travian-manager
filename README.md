@@ -31,7 +31,7 @@ https://chromedriver.storage.googleapis.com/index.html
 
 - add template for local config
 
-- загонять ресы в войска с обменом, если до напа осталось меньше часа
 - нотифаим если идёт атака (смс?)
+- загонять ресы в войска с обменом, если до напа осталось меньше часа
 - separate action log
 - screenshots for exceptions
