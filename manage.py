@@ -96,11 +96,10 @@ def extract_oases_enemies_from_source(source):
 
 class Manager(object):
 
-    RUN_TIMEOUT = 10 * 60
-
     MAIN_PAGE = config.HOST + '/dorf1.php'
     VILLAGE_PAGE = config.HOST + '/dorf2.php'
     HERO_PAGE = config.HOST + '/hero.php'
+    REPORTS_PAGE = config.HOST + '/berichte.php'
     HERO_ADVENTURE_PAGE = config.HOST + '/hero.php?t=3'
     AUCTION_PAGE = config.HOST + '/hero.php?t=4&action=buy'
     MAP_PAGE = config.HOST + '/karte.php'
@@ -109,10 +108,6 @@ class Manager(object):
 
     loop_number = 0
     is_logged = False
-    resource_buildings = []
-    resource_production = {}
-    resource_stock = {}
-    build_queue_slots = 0
     hero_hp = 0
     ajax_token = ''
 
@@ -141,6 +136,17 @@ class Manager(object):
 
             # анализируем деревню
             self._analyze()
+
+            # remove uninteresting reports
+            if config.ENABLE_REMOVE_FARM_REPORTS:
+                try:
+                    self._remove_uninteresting_reports()
+                except Exception as e:
+                    logging.error('reports remove process exception %s', e)
+
+            # проверяем вражеские налёты
+            if config.ENABLE_ATTACK_NOTIFY:
+                self._notify_about_attack()
 
             # отправляем героя в приключения
             if config.ENABLE_ADVENTURES:
@@ -186,7 +192,7 @@ class Manager(object):
 
             self._sanitizing()
 
-            sleep_time = self.RUN_TIMEOUT + self.RUN_TIMEOUT * random.random()
+            sleep_time = config.LOOP_TIMEOUT + config.LOOP_TIMEOUT * random.random()
             logging.info('sleep random time %f %d', sleep_time, self.loop_number)
             time.sleep(sleep_time)
 
@@ -318,6 +324,39 @@ class Manager(object):
             logging.warning('hero analyze error')
             self.hero_hp = 0
 
+    def _notify_about_attack(self):
+        logging.info('notify about attack call')
+        self.driver.get(self.MAIN_PAGE)
+
+        links = self.driver.find_elements_by_xpath('//div[@id="sidebarBoxVillagelist"]//li//a/div[@class="name"]'
+                                                   '/parent::a')
+        village_links = [link.get_attribute('href') for link in links]
+        logging.info('found %d villages', len(village_links))
+
+        attack_timing = []
+        for link in village_links:
+            logging.info('check attack %s village', link)
+            self.driver.get(link)
+            try:
+                attack_timer_elem = self.driver.find_element_by_xpath('//div[@id="map_details"]'
+                                                                '//div[contains(@class, "villageList")]'
+                                                                '//img[@class="att1"]'
+                                                                '/ancestor::tr//span[@class="timer"]')
+                logging.info('find attack timer %s', attack_timer_elem.text)
+                attack_timing.append(int(attack_timer_elem.get_attribute('value')))
+            except NoSuchElementException:
+                logging.info('not found enemy attacks')
+                continue
+
+        logging.info('found %d attack timings', len(attack_timing))
+        logging.info(attack_timing)
+
+        if attack_timing:
+            send_desktop_notify('found % d attacks' % len(attack_timing))
+            if min(attack_timing) <= config.LOOP_TIMEOUT * 2.5:
+                config.send_attack_notify('t-manager: found %d attacks (min time %d)' %
+                                          (len(attack_timing), min(attack_timing)))
+
     def _send_hero_to_adventures(self):
         logging.info('send hero to adventure call')
         if not self.hero_hp > config.HERO_HP_THRESHOLD_FOR_ADVENTURE:
@@ -394,7 +433,7 @@ class Manager(object):
             logging.warning('not found full oasis?')
             return
 
-        # todo send hero to selected oasis
+        # send hero to selected oasis
         res = self.__goto_sendarmy_tab()
         if not res:
             logging.warning('not found send army tab')
@@ -595,6 +634,25 @@ class Manager(object):
                 custom_wait()
                 send_desktop_notify('trade: bid item %s by %d' % (item_name_str, bid))
                 self.driver.get(self.AUCTION_PAGE)
+
+    def _remove_uninteresting_reports(self):
+        logging.info('remove reports call')
+        self.driver.get(self.REPORTS_PAGE)
+        reports_for_delete = self.driver.find_elements_by_xpath('//form[@id="reportsForm"]'
+                                                                '//table[@id="overview"]'
+                                                                '//td[contains(@class, "sub")]'
+                                                                '//img[contains(@alt, "%s")]'
+                                                                '/ancestor::tr'
+                                                                '/td[contains(@class, "sel")]'
+                                                                '//input[@type="checkbox"]'
+                                                                % config.REPORTS_ATTACK_PATTERN1)
+        logging.info('found %d reports for delete', len(reports_for_delete))
+        for checkbox in reports_for_delete:
+            checkbox.click()
+
+        if reports_for_delete:
+            self.driver.find_element_by_id('del').click()
+            custom_wait()
 
 
     def __goto_farmlist(self):

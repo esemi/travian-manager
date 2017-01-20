@@ -18,20 +18,20 @@ https://chromedriver.storage.googleapis.com/index.html
 - покупать лоты на ауке
 - оповещать на десктоп о своих действиях
 - качать героя на оазисах
+- сигналить по смс о обнаруженной атаке
+- авто удаление репортов о успешном грабеже без потерь
+
 
 
 ##### TODO
-- авто удаление репортов о успешном грабеже без потерь
 - check summary population of player for select new farms
-- save cookie for next run
-- fix all attacked list case
-
+- отправлять армии в первую очередь на полные деревни
 - строим войска
-- развиваем деревню и поля по конфигу
+
+- remove reports from all pages
+- save cookie for next run
+- загонять ресы в войска с обменом, если до напа осталось меньше часа
 
 - add template for local config
-
-- нотифаим если идёт атака (смс?)
-- загонять ресы в войска с обменом, если до напа осталось меньше часа
 - separate action log
 - screenshots for exceptions

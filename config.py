@@ -6,6 +6,7 @@ CHROME_DRIVER_PATH = os.path.sep.join([os.path.abspath(os.path.dirname(__file__)
 FIND_TIMEOUT = 15
 REQUEST_TIMEOUT = 45
 CUSTOM_WAIT_TIMEOUT = 15
+LOOP_TIMEOUT = 11 * 60  # fact loop timeout maybe from LOOP_TIMEOUT to LOOP_TIMEOUT*2 (random use)
 
 CREDS = ('login', 'pass')
 HOST = 'http://ts1.travian.com'
@@ -44,6 +45,7 @@ FARM_LIST_TAB_PATTERN = 'Farm List'
 FARM_LIST_ALREADY_ATTACK_PATTERN = 'Own attacking troops'
 FARM_LIST_SEND_RESULT_PATTERN = 'raids have been made'
 SEND_ARMY_TAB_PATTERN = 'Send troops'
+REPORTS_ATTACK_PATTERN1 = 'as attacker without losses'
 
 AUTO_FARM_LISTS = ['farm list fullname']
 
@@ -74,6 +76,18 @@ ENABLE_UPDATE_FARMS = True
 ENABLE_TRADE = True
 ENABLE_ADVENTURES = True
 ENABLE_QUEST_COMPLETE = True
+ENABLE_ATTACK_NOTIFY = False
+ENABLE_REMOVE_FARM_REPORTS = True
+
+
+SMS_TO_PHONE = '+3123456789'
+SMS_USER = 'smsc username'
+SMS_PASS = 'smsc login'
+
+
+def send_attack_notify(message):
+    pass
+
 
 try:
     from config_local import *
