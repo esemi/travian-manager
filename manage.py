@@ -461,8 +461,9 @@ class Manager(object):
         if not res:
             return
 
+        patterns = config.AUTO_FARM_LISTS
         farm_list_ids = []
-        for title_pattern in config.AUTO_FARM_LISTS:
+        for title_pattern in patterns:
             logging.info('process farm list %s', title_pattern)
             id = self.__search_farmlist_id_by_title(title_pattern)
             if id:
@@ -474,47 +475,7 @@ class Manager(object):
         for id in farm_list_ids:
             logging.info('process farm list id %s', id)
             try:
-                logging.info('sort list')
-                sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
-                    './/td[contains(@class, "distance") and contains(@class, "sortable")]')
-                sort_column.click()
-                custom_wait()
-                sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
-                    './/td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
-                sort_column.click()
-                custom_wait()
-
-                logging.info('select villages')
-                slots = self.__search_farmlist_by_id(id).find_elements_by_class_name('slotRow')
-                selected = False
-                for tr in slots:
-                    raw_content = tr.get_attribute('innerHTML')
-                    # ignore if currently attacked
-                    if config.FARM_LIST_ALREADY_ATTACK_PATTERN in raw_content:
-                        continue
-
-                    # ignore if last raid was loses
-                    if config.FARM_LIST_LOSSES_PATTERN1 in raw_content or config.FARM_LIST_LOSSES_PATTERN2 in raw_content:
-                        continue
-                    checkbox_elem = tr.find_element_by_xpath('.//input[@type="checkbox"]')
-                    checkbox_elem.click()
-                    selected = True
-
-                if not selected:
-                    logging.info('not found raids')
-                    continue
-
-                logging.info('send farm')
-                button = self.__search_farmlist_by_id(id).find_element_by_xpath(
-                    './/button[contains(@value, "%s")]' % config.FARM_LIST_SEND_BUTTON_PATTERN)
-                button.click()
-                custom_wait()
-                try:
-                    result = self.__search_farmlist_by_id(id).find_element_by_xpath(
-                        './/p[contains(text(), "%s")]' % config.FARM_LIST_SEND_RESULT_PATTERN)
-                    logging.info('result message is %s', result.text)
-                except NoSuchElementException:
-                    logging.warning('not found result message')
+                self.__send_farm_to_list(id)
             except Exception as e:
                 logging.error('send farms exception %s', e)
 
@@ -831,6 +792,49 @@ class Manager(object):
 
         form.find_element_by_id('save').click()
         custom_wait()
+
+    def __send_farm_to_list(self, id):
+        logging.info('sort list')
+        sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
+            './/td[contains(@class, "distance") and contains(@class, "sortable")]')
+        sort_column.click()
+        custom_wait()
+        sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
+            './/td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
+        sort_column.click()
+        custom_wait()
+
+        logging.info('select villages')
+        slots = self.__search_farmlist_by_id(id).find_elements_by_class_name('slotRow')
+        selected = False
+        for tr in slots:
+            raw_content = tr.get_attribute('innerHTML')
+            # ignore if currently attacked
+            if config.FARM_LIST_ALREADY_ATTACK_PATTERN in raw_content:
+                continue
+
+            # ignore if last raid was loses
+            if config.FARM_LIST_LOSSES_PATTERN1 in raw_content or config.FARM_LIST_LOSSES_PATTERN2 in raw_content:
+                continue
+            checkbox_elem = tr.find_element_by_xpath('.//input[@type="checkbox"]')
+            checkbox_elem.click()
+            selected = True
+
+        if not selected:
+            logging.info('not found raids')
+            return
+
+        logging.info('send farm')
+        button = self.__search_farmlist_by_id(id).find_element_by_xpath(
+            './/button[contains(@value, "%s")]' % config.FARM_LIST_SEND_BUTTON_PATTERN)
+        button.click()
+        custom_wait()
+        try:
+            result = self.__search_farmlist_by_id(id).find_element_by_xpath(
+                './/p[contains(text(), "%s")]' % config.FARM_LIST_SEND_RESULT_PATTERN)
+            logging.info('result message is %s', result.text)
+        except NoSuchElementException:
+            logging.warning('not found result message')
 
 
 if __name__ == '__main__':

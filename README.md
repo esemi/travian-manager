@@ -22,12 +22,14 @@ https://chromedriver.storage.googleapis.com/index.html
 - авто удаление репортов о успешном грабеже без потерь
 
 
+- отправлять армии в первую очередь на полные деревни
 
 ##### TODO
-- отправлять армии в первую очередь на полные деревни
-- cлать фермеров раз в день, если потери были невеликиgitgit
+- fix add not available farms to list
+- cлать фермеров раз в день, если потери были невелики
 - check summary population of player for select new farms
 - строим войска
+
 
 - remove reports from all pages
 - save cookie for next run
