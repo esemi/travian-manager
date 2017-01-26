@@ -318,7 +318,7 @@ class Manager(object):
             value = status_div.find_element_by_class_name('health')\
                 .find_element_by_xpath('.//td[contains(@class, "current")]').text.strip()
             value = int(re.findall(r'(\d+)', str(value))[0])
-            self.hero_hp = max(100, value)
+            self.hero_hp = max(0, value)
             logging.info('hero HP percent %d', self.hero_hp)
         except:
             logging.warning('hero analyze error')

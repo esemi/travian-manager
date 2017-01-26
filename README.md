@@ -24,8 +24,9 @@ https://chromedriver.storage.googleapis.com/index.html
 
 
 ##### TODO
-- check summary population of player for select new farms
 - отправлять армии в первую очередь на полные деревни
+- cлать фермеров раз в день, если потери были невеликиgitgit
+- check summary population of player for select new farms
 - строим войска
 
 - remove reports from all pages
