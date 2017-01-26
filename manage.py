@@ -453,6 +453,7 @@ class Manager(object):
         custom_wait()
 
     def _send_army_to_farm(self):
+        logging.info('send army to farm call')
         if not config.AUTO_FARM_LISTS:
             logging.info('not found farm list for automate')
             return
@@ -462,20 +463,21 @@ class Manager(object):
             return
 
         patterns = config.AUTO_FARM_LISTS
-        farm_list_ids = []
-        for title_pattern in patterns:
-            logging.info('process farm list %s', title_pattern)
-            id = self.__search_farmlist_id_by_title(title_pattern)
-            if id:
-                farm_list_ids.append(id)
+        random.shuffle(patterns)
 
-        logging.info('fetch farm list ids %s', farm_list_ids)
-        random.shuffle(farm_list_ids)
-        logging.info('fetch farm list ids %s rand', farm_list_ids)
-        for id in farm_list_ids:
-            logging.info('process farm list id %s', id)
+        # send to carry full villages
+        for title in patterns:
+            logging.info('process farm list %s', title)
             try:
-                self.__send_farm_to_list(id)
+                self.__send_farm_to_list(title, True)
+            except Exception as e:
+                logging.error('send farms exception %s', e)
+
+        # send to all
+        for title in patterns:
+            logging.info('process farm list %s', title)
+            try:
+                self.__send_farm_to_list(title)
             except Exception as e:
                 logging.error('send farms exception %s', e)
 
@@ -793,14 +795,28 @@ class Manager(object):
         form.find_element_by_id('save').click()
         custom_wait()
 
-    def __send_farm_to_list(self, id):
-        logging.info('sort list')
-        sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
-            './/td[contains(@class, "distance") and contains(@class, "sortable")]')
-        sort_column.click()
-        custom_wait()
-        sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
-            './/td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
+    def __send_farm_to_list(self, title, carry_full_only=False):
+        id = self.__search_farmlist_id_by_title(title)
+        if not id:
+            logging.warning('not found list')
+            return
+
+        if carry_full_only:
+            logging.info('sort list by distance')
+            sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
+                './/td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
+            sort_column.click()
+            custom_wait()
+            sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
+                './/td[contains(@class, "distance") and contains(@class, "sortable")]')
+        else:
+            logging.info('sort list by last raid')
+            sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
+                './/td[contains(@class, "distance") and contains(@class, "sortable")]')
+            sort_column.click()
+            custom_wait()
+            sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
+                './/td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
         sort_column.click()
         custom_wait()
 
@@ -816,6 +832,11 @@ class Manager(object):
             # ignore if last raid was loses
             if config.FARM_LIST_LOSSES_PATTERN1 in raw_content or config.FARM_LIST_LOSSES_PATTERN2 in raw_content:
                 continue
+
+            # ignore if last raid was not full cary
+            if carry_full_only and config.FARM_LIST_CARRY_FULL_PATTERN not in raw_content:
+                continue
+
             checkbox_elem = tr.find_element_by_xpath('.//input[@type="checkbox"]')
             checkbox_elem.click()
             selected = True
