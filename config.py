@@ -46,7 +46,7 @@ FARM_LIST_ALREADY_ATTACK_PATTERN = 'Own attacking troops'
 FARM_LIST_CARRY_FULL_PATTERN = 'carry full'
 FARM_LIST_SEND_RESULT_PATTERN = 'raids have been made'
 SEND_ARMY_TAB_PATTERN = 'Send troops'
-REPORTS_ATTACK_PATTERN1 = 'as attacker without losses'
+REPORTS_ATTACK_PATTERN1 = 'Won as attacker without losses'
 
 AUTO_FARM_LISTS = ['farm list fullname']
 
@@ -66,21 +66,21 @@ IGNORE_FARM_PLAYERS = ['nikname1',]
 IGNORE_FARM_ALLY = ['allyname1',]
 
 AUCTION_BIDS = {
-    'Ointment': 16,
+    'Ointment': 19,
     'Cage': 13,
-    'Small Bandage': 11,
-    'Bucket': 390,
-    'Bandage': 15
+    'Bucket': 190,
+    'Bandage': 15,
+    'Scroll': 11,
 }
 
-ENABLE_HERO_TERROR = False
-ENABLE_TRADE = False
+ENABLE_HERO_TERROR = True
+ENABLE_TRADE = True
 ENABLE_SEND_FARMS = True
 ENABLE_UPDATE_FARMS = False
-ENABLE_ADVENTURES = False
-ENABLE_QUEST_COMPLETE = False
-ENABLE_ATTACK_NOTIFY = False
-ENABLE_REMOVE_FARM_REPORTS = False
+ENABLE_ADVENTURES = True
+ENABLE_QUEST_COMPLETE = True
+ENABLE_ATTACK_NOTIFY = True
+ENABLE_REMOVE_FARM_REPORTS = True
 
 
 SMS_TO_PHONE = '+3123456789'

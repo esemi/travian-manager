@@ -146,7 +146,10 @@ class Manager(object):
 
             # проверяем вражеские налёты
             if config.ENABLE_ATTACK_NOTIFY:
-                self._notify_about_attack()
+                try:
+                    self._notify_about_attack()
+                except Exception as e:
+                    logging.error('notify about attack exception %s', e)
 
             # отправляем героя в приключения
             if config.ENABLE_ADVENTURES:
@@ -352,8 +355,8 @@ class Manager(object):
         logging.info(attack_timing)
 
         if attack_timing:
-            send_desktop_notify('found % d attacks' % len(attack_timing))
-            if min(attack_timing) <= config.LOOP_TIMEOUT * 2.5:
+            send_desktop_notify('found %d attacks (%s)' % (len(attack_timing), min(attack_timing)))
+            if min(attack_timing) <= config.LOOP_TIMEOUT * 4.:
                 config.send_attack_notify('t-manager: found %d attacks (min time %d)' %
                                           (len(attack_timing), min(attack_timing)))
 
@@ -467,7 +470,7 @@ class Manager(object):
 
         # send to carry full villages
         for title in patterns:
-            logging.info('process farm list %s', title)
+            logging.info('process farm list carry full %s', title)
             try:
                 self.__send_farm_to_list(title, True)
             except Exception as e:
@@ -604,7 +607,7 @@ class Manager(object):
         reports_for_delete = self.driver.find_elements_by_xpath('//form[@id="reportsForm"]'
                                                                 '//table[@id="overview"]'
                                                                 '//td[contains(@class, "sub")]'
-                                                                '//img[contains(@alt, "%s")]'
+                                                                '//img[contains(@alt, "%s") and contains(@class, "iReport1")]'
                                                                 '/ancestor::tr'
                                                                 '/td[contains(@class, "sel")]'
                                                                 '//input[@type="checkbox"]'
@@ -616,7 +619,6 @@ class Manager(object):
         if reports_for_delete:
             self.driver.find_element_by_id('del').click()
             custom_wait()
-
 
     def __goto_farmlist(self):
         rally_point_href = self.__find_rally_point_build()
