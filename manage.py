@@ -188,8 +188,16 @@ class Manager(object):
                 except Exception as e:
                     logging.error('trade process exception %s', e)
 
-            # добавляем цели в фарм лист
-            if config.ENABLE_UPDATE_FARMS:
+            # обновляем фарм листы
+            if config.ENABLE_CLEAR_FARMS and config.ENABLE_UPDATE_FARMS \
+                    and not float(self.loop_number) % config.CLEAR_FARM_LIST_FACTOR:
+                try:
+                    self._clear_farm_lists()
+                except Exception as e:
+                    logging.error('farm clear process exception %s', e)
+
+            # обновляем фарм листы
+            if config.ENABLE_UPDATE_FARMS and not float(self.loop_number) % config.UPDATE_FARM_LIST_FACTOR:
                 try:
                     self._update_farm_lists()
                 except Exception as e:
@@ -478,10 +486,26 @@ class Manager(object):
             except Exception as e:
                 logging.error('send farms exception %s', e)
 
-    def _update_farm_lists(self):
-        if not float(self.loop_number) % config.UPDATE_FARM_LIST_FACTOR:
+    def _clear_farm_lists(self):
+        logging.info('process clear farm list')
+        res = self.__goto_farmlist()
+        if not res:
+            logging.warning('not found farm list link - pass')
             return
 
+        names = set([l['list_name'] for l in config.AUTO_UPDATE_FARM_LISTS])
+        logging.info('select %d lists for remove', len(names))
+        for name in names:
+            logging.info('process clear farm list %s', name)
+            while True:
+                id = self.__search_farmlist_id_by_title(name)
+                if not id:
+                    logging.info('farm list already cleared')
+                    break
+                self.__remove_farm_list(id)
+                send_desktop_notify('remove farm list %s' % name)
+
+    def _update_farm_lists(self):
         logging.info('process autofill farm list')
         res = self.__goto_farmlist()
         if not res:
@@ -491,7 +515,7 @@ class Manager(object):
         exist_villages = self.__extract_exist_villages_from_farmlist()
         logging.info('found %d already exist villages', len(exist_villages))
 
-        lists = config.AUTO_COLLECT_FARM_LISTS
+        lists = config.AUTO_UPDATE_FARM_LISTS
         random.shuffle(lists)
         for conf in lists:
             logging.info('process farm collect config %s', conf)
@@ -676,10 +700,8 @@ class Manager(object):
             logging.info('counter %s', counter)
             usage = int(re.findall(r'(\d+)', counter)[0])
             total = int(re.findall(r'(\d+)', counter)[1])
-            logging.info('counter %s %s', usage, total)
             if usage < total:
                 return id, title_pattern
-
             logging.info('list is full - next loop')
             title_pattern += '_'
 
@@ -776,9 +798,17 @@ class Manager(object):
         select = Select(create_elem.find_element_by_id('did'))
         select.select_by_visible_text(village_name)
 
-        create_elem.find_element_by_xpath('.//button[@value="Create"]').click()
+        create_elem.find_element_by_xpath(
+            './/button[@value="%s"]' % config.FARM_LIST_CREATE_BUTTON_PATTERN).click()
         custom_wait()
         self.__goto_farmlist()
+
+    def __remove_farm_list(self, list_id):
+        logging.info('remove farm list %s', list_id)
+        self.__search_farmlist_by_id(list_id).find_element_by_xpath('.//button[@id="deleteRaidList"]').click()
+        custom_wait()
+        self.driver.find_element_by_xpath('//button[@type="submit" and contains(@class, "dialogButtonOk")]').click()
+        custom_wait()
 
     def __add_to_farm_list(self, id, p, troop_id, troop_count):
         custom_wait()
