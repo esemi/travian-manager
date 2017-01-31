@@ -105,6 +105,8 @@ class Manager(object):
     MAP_PAGE = config.HOST + '/karte.php'
     MAP_DATA_PAGE = config.HOST + '/ajax.php?cmd=mapPositionData'
     TILE_DATA_PAGE = config.HOST + '/ajax.php?cmd=viewTileDetails'
+    FARM_LIST_PAGE = None
+    SEND_ARMY_PAGE = None
 
     loop_number = 0
     is_logged = False
@@ -193,28 +195,20 @@ class Manager(object):
                 except Exception as e:
                     logging.error('farm update process exception %s', e)
 
-            self._sanitizing()
+            if not config.DEBUG:
+                self._sanitizing()
 
             sleep_time = config.LOOP_TIMEOUT + config.LOOP_TIMEOUT * random.random()
             logging.info('sleep random time %f %d', sleep_time, self.loop_number)
             time.sleep(sleep_time)
 
     def _sanitizing(self):
-        for close in self.driver.find_elements_by_id('dialogCancelButton'):
-            try:
-                close.click()
-            except:
-                pass
+        self.__close_all_dialogs()
         try:
             self.driver.get(self.MAIN_PAGE)
         except:
             pass
-
-        for close in self.driver.find_elements_by_id('dialogCancelButton'):
-            try:
-                close.click()
-            except:
-                pass
+        self.__close_all_dialogs()
 
     def _quest_complete(self):
         logging.info('complete quest call')
@@ -485,7 +479,7 @@ class Manager(object):
                 logging.error('send farms exception %s', e)
 
     def _update_farm_lists(self):
-        if self.loop_number != 1 or not float(self.loop_number) % 50:
+        if not float(self.loop_number) % config.UPDATE_FARM_LIST_FACTOR:
             return
 
         logging.info('process autofill farm list')
@@ -621,29 +615,36 @@ class Manager(object):
             custom_wait()
 
     def __goto_farmlist(self):
-        rally_point_href = self.__find_rally_point_build()
-        logging.debug('found rally point href %s', rally_point_href)
-        if not rally_point_href:
-            logging.warning('not found rally point')
-            return False
-        self.driver.get(rally_point_href)
-        farm_list_tab = self.driver.find_element_by_xpath(
-            '//a[@class="tabItem" and contains(text(), "%s")]' % config.FARM_LIST_TAB_PATTERN)
-        farm_list_tab.click()
+        if not self.FARM_LIST_PAGE:
+            rally_point_href = self.__find_rally_point_build()
+            logging.debug('found rally point href %s', rally_point_href)
+            if not rally_point_href:
+                logging.warning('not found rally point')
+                return False
+
+            self.driver.get(rally_point_href)
+            farm_list_tab = self.driver.find_element_by_xpath(
+                '//a[@class="tabItem" and contains(text(), "%s")]' % config.FARM_LIST_TAB_PATTERN)
+            self.FARM_LIST_PAGE = farm_list_tab.get_attribute('href')
+
+        self.driver.get(self.FARM_LIST_PAGE)
         custom_wait()
         return True
 
     def __goto_sendarmy_tab(self):
-        rally_point_href = self.__find_rally_point_build()
-        logging.debug('found rally point href %s', rally_point_href)
-        if not rally_point_href:
-            logging.warning('not found rally point')
-            return False
+        if not self.SEND_ARMY_PAGE:
+            rally_point_href = self.__find_rally_point_build()
+            logging.debug('found rally point href %s', rally_point_href)
+            if not rally_point_href:
+                logging.warning('not found rally point')
+                return False
 
-        self.driver.get(rally_point_href)
-        send_army_tab = self.driver.find_element_by_xpath(
-            '//a[@class="tabItem" and contains(text(), "%s")]' % config.SEND_ARMY_TAB_PATTERN)
-        send_army_tab.click()
+            self.driver.get(rally_point_href)
+            send_army_tab = self.driver.find_element_by_xpath(
+                '//a[@class="tabItem" and contains(text(), "%s")]' % config.SEND_ARMY_TAB_PATTERN)
+            self.SEND_ARMY_PAGE = send_army_tab.get_attribute('href')
+
+        self.driver.get(self.SEND_ARMY_PAGE)
         custom_wait()
         return True
 
@@ -781,7 +782,9 @@ class Manager(object):
 
     def __add_to_farm_list(self, id, p, troop_id, troop_count):
         custom_wait()
-        self.__search_farmlist_by_id(id).find_element_by_xpath('.//div[@class="addSlot"]/button[@value="Add"]').click()
+        self.__close_all_dialogs()
+        self.__search_farmlist_by_id(id).find_element_by_xpath(
+            './/div[@class="addSlot"]/button[@value="%s"]' % config.FARM_LIST_ADD_BUTTON_PATTERN).click()
         custom_wait()
 
         form = self.driver.find_element_by_id('raidListSlot')
@@ -859,6 +862,17 @@ class Manager(object):
         except NoSuchElementException:
             logging.warning('not found result message')
 
+    def __close_all_dialogs(self):
+        while True:
+            elems = self.driver.find_elements_by_id('dialogCancelButton')
+            if not elems:
+                break
+            for e in elems:
+                try:
+                    e.click()
+                    custom_wait()
+                except Exception as e:
+                    pass
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
@@ -875,6 +889,7 @@ if __name__ == '__main__':
         raise e
 
     finally:
-        m.close()
+        if not config.DEBUG:
+            m.close()
 
 

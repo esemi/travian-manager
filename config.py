@@ -3,10 +3,10 @@
 import os
 
 CHROME_DRIVER_PATH = os.path.sep.join([os.path.abspath(os.path.dirname(__file__)), 'chromedriver'])
-FIND_TIMEOUT = 15
-REQUEST_TIMEOUT = 45
-CUSTOM_WAIT_TIMEOUT = 15
-LOOP_TIMEOUT = 11 * 60  # fact loop timeout maybe from LOOP_TIMEOUT to LOOP_TIMEOUT*2 (random use)
+FIND_TIMEOUT = 10
+REQUEST_TIMEOUT = 35
+CUSTOM_WAIT_TIMEOUT = 10
+LOOP_TIMEOUT = 10 * 60  # fact loop timeout maybe from LOOP_TIMEOUT to LOOP_TIMEOUT*2 (random use)
 
 CREDS = ('login', 'pass')
 HOST = 'http://ts1.travian.com'
@@ -38,6 +38,7 @@ HERO_HP_THRESHOLD_FOR_TERROR = 85
 HERO_TERROR_MIN_ENEMIES = 20
 
 FARM_LIST_SEND_BUTTON_PATTERN = 'start raid'
+FARM_LIST_ADD_BUTTON_PATTERN = 'add'
 FARM_LIST_BUILDING_PATTERN = 'Rally Point'
 FARM_LIST_LOSSES_PATTERN1 = 'Lost as attacker'
 FARM_LIST_LOSSES_PATTERN2 = 'with losses'
@@ -66,21 +67,25 @@ IGNORE_FARM_PLAYERS = ['nikname1',]
 IGNORE_FARM_ALLY = ['allyname1',]
 
 AUCTION_BIDS = {
-    'Ointment': 19,
+    'Ointment': 24,
     'Cage': 13,
-    'Bucket': 190,
-    'Bandage': 15,
+    'Bucket': 210,
+    'Bandage': 11,
     'Scroll': 11,
 }
 
-ENABLE_HERO_TERROR = True
-ENABLE_TRADE = True
-ENABLE_SEND_FARMS = True
-ENABLE_UPDATE_FARMS = False
-ENABLE_ADVENTURES = True
-ENABLE_QUEST_COMPLETE = True
-ENABLE_ATTACK_NOTIFY = True
-ENABLE_REMOVE_FARM_REPORTS = True
+UPDATE_FARM_LIST_FACTOR = 50
+
+ENABLE_HERO_TERROR = False
+ENABLE_TRADE = False
+ENABLE_SEND_FARMS = False
+ENABLE_UPDATE_FARMS = True
+ENABLE_ADVENTURES = False
+ENABLE_QUEST_COMPLETE = False
+ENABLE_ATTACK_NOTIFY = False
+ENABLE_REMOVE_FARM_REPORTS = False
+
+DEBUG = True
 
 
 SMS_TO_PHONE = '+3123456789'

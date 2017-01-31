@@ -33,10 +33,11 @@ https://chromedriver.storage.googleapis.com/index.html
 
 
 ##### TODO
-- fix add not available farms to list
 - cлать фермеров раз в день, если потери были невелики
+- слать дешёвых фермеров, если были потери
 - check summary population of player for select new farms
 - строим войска
+- перетасовывать фарм листы
 
 - remove reports from all pages
 - save cookie for next run

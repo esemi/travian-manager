@@ -21,7 +21,7 @@ def compute_autofarm_distances(x: int, y: int, offset: int, conf: dict):
 def send_attack_notify(message):
     import logging
     import requests
-    from config import SMS_TO_PHONE, SMS_USER, SMS_PASS
+    from config import SMS_TO_PHONE, SMS_USER, SMS_PASS, DEBUG
 
     params = {
         'login': SMS_USER,
@@ -33,14 +33,15 @@ def send_attack_notify(message):
         'sender': '',
         'charset': 'utf-8',
     }
-    logging.debug('send sms %s' % message)
+    logging.info('send sms %s %s' % (DEBUG, message))
 
-    try:
-        response = requests.get('http://smsc.ru/sys/send.php', params=params)
-        response.raise_for_status()
-    except Exception as e:
-        logging.error('send sms exception %s' % e)
-    else:
-        logging.info('send sms response %s' % response.content)
-        if not response.content.startswith(b'OK'):
-            logging.error('send sms error response')
+    if not DEBUG:
+        try:
+            response = requests.get('http://smsc.ru/sys/send.php', params=params)
+            response.raise_for_status()
+        except Exception as e:
+            logging.error('send sms exception %s' % e)
+        else:
+            logging.info('send sms response %s' % response.content)
+            if not response.content.startswith(b'OK'):
+                logging.error('send sms error response')
