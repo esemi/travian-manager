@@ -496,21 +496,7 @@ class Manager(object):
                 logging.info('select village %s', village)
 
                 # found building for troop type
-                unit_input_elem = None
-                try:
-                    self.driver.find_element_by_xpath('//div[@id="sidebarBoxActiveVillage"]//button[contains(@class, "barracksWhite")]').click()
-                    unit_input_elem = self.driver.find_element_by_xpath('//div[contains(@class, "trainUnits")]//input[@name="%s"]' % conf['troop_id'])
-                    logging.info('unit found in barracks')
-                except NoSuchElementException:
-                    try:
-                        self.driver.find_element_by_xpath(
-                            '//div[@id="sidebarBoxActiveVillage"]//button[contains(@class, "stableWhite")]').click()
-                        unit_input_elem = self.driver.find_element_by_xpath(
-                            '//div[contains(@class, "trainUnits")]//input[@name="%s"]' % conf['troop_id'])
-                        logging.info('unit found in stable')
-                    except NoSuchElementException:
-                        pass
-
+                unit_input_elem = self.__find_troop_train_building(conf['troop_id'])
                 if not unit_input_elem:
                     logging.warning('unit build not found')
                     continue
@@ -519,7 +505,7 @@ class Manager(object):
                 elem = unit_input_elem.find_element_by_xpath('./following-sibling::a')
                 available_unit_count = int(elem.text)
                 logging.info('found available unit count %d', available_unit_count)
-                if not available_unit_count:
+                if available_unit_count <= 0:
                     logging.info('not found available units')
                     continue
 
@@ -540,7 +526,14 @@ class Manager(object):
                     continue
 
                 # build with check village
-                task_value = min(available_unit_count, need_train - already_queue_count, conf['troop_queue_max'] - already_queue_count)
+                task_value = min(
+                    available_unit_count,
+                    need_train - already_queue_count,
+                    conf['troop_queue_max'] - already_queue_count)
+                if task_value <= 0:
+                    logging.info('not need train more')
+                    continue
+
                 logging.info('send new troop build task %d', task_value)
                 unit_input_elem.clear()
                 unit_input_elem.send_keys(str(task_value))
@@ -728,6 +721,39 @@ class Manager(object):
             self.driver.find_element_by_id('del').click()
             custom_wait()
 
+    def __find_troop_train_building(self, troop_id):
+
+        def _search_input():
+            return self.driver.find_element_by_xpath('//div[contains(@class, "trainUnits")]//input[@name="%s"]' % troop_id)
+
+        try:
+            self.driver.find_element_by_xpath(
+                '//div[@id="sidebarBoxActiveVillage"]//button[contains(@class, "barracksWhite")]').click()
+            unit_input_elem = _search_input()
+            logging.info('unit found in barracks')
+            return unit_input_elem
+        except NoSuchElementException:
+            pass
+
+        try:
+            self.driver.find_element_by_xpath(
+                '//div[@id="sidebarBoxActiveVillage"]//button[contains(@class, "stableWhite")]').click()
+            unit_input_elem = _search_input()
+            logging.info('unit found in stable')
+            return unit_input_elem
+        except NoSuchElementException:
+            pass
+
+        try:
+            self.driver.find_element_by_xpath(
+                '//div[@id="sidebarBoxActiveVillage"]//button[contains(@class, "workshopWhite")]').click()
+            unit_input_elem = _search_input()
+            logging.info('unit found in workshop')
+            return unit_input_elem
+        except NoSuchElementException:
+            pass
+
+        return None
 
     def __find_current_unit_count(self, unit_id, village):
         self.driver.get(self.TROOPS_OVERVIEW_PAGE)
