@@ -47,6 +47,8 @@ FARM_LIST_TAB_PATTERN = 'Farm List'
 FARM_LIST_ALREADY_ATTACK_PATTERN = 'Own attacking troops'
 FARM_LIST_CARRY_FULL_PATTERN = 'carry full'
 FARM_LIST_SEND_RESULT_PATTERN = 'raids have been made'
+BARRACKS_BUILDING_PATTERN = 'Barracks'
+STABLE_BUILDING_PATTERN = 'Stable'
 SEND_ARMY_TAB_PATTERN = 'Send troops'
 REPORTS_ATTACK_PATTERN1 = 'Won as attacker without losses'
 
@@ -63,30 +65,39 @@ AUTO_UPDATE_FARM_LISTS = [{
     'troop_count': 10
 },]
 
+AUTO_TROOP_BUILD = {
+    'village_name': [
+        {'troop_id': 't4', 'troop_queue_max': 20, 'troop_max': 600},
+        {'troop_id': 't3', 'troop_queue_max': 20, 'troop_max': 1000},
+    ]
+}
+
 
 IGNORE_FARM_PLAYERS = ['nikname1',]
 IGNORE_FARM_ALLY = ['allyname1',]
 
 AUCTION_BIDS = {
-    'Ointment': 24,
+    'Ointment': 21,
     'Cage': 13,
     'Bucket': 210,
     'Bandage': 11,
+    'Small Bandage': 11,
     'Scroll': 11,
 }
 
 UPDATE_FARM_LIST_FACTOR = 20
 CLEAR_FARM_LIST_FACTOR = 200
 
-ENABLE_HERO_TERROR = False
-ENABLE_TRADE = False
-ENABLE_SEND_FARMS = False
+ENABLE_HERO_TERROR = True
+ENABLE_TRADE = True
+ENABLE_SEND_FARMS = True
 ENABLE_UPDATE_FARMS = True
-ENABLE_CLEAR_FARMS = True
-ENABLE_ADVENTURES = False
-ENABLE_QUEST_COMPLETE = False
-ENABLE_ATTACK_NOTIFY = False
-ENABLE_REMOVE_FARM_REPORTS = False
+ENABLE_CLEAR_FARMS = False
+ENABLE_ADVENTURES = True
+ENABLE_QUEST_COMPLETE = True
+ENABLE_ATTACK_NOTIFY = True
+ENABLE_REMOVE_FARM_REPORTS = True
+ENABLE_BUILD_TROOPS = True
 
 DEBUG = True
 

@@ -5,6 +5,8 @@ Travian manager
 
 Разрабатывался и тестировался на .com сервере версии 4.*
 
+Для некоторых функций нужен плюс и золотой клуб
+
 Use google chrome driver for selenium
 
 https://chromedriver.storage.googleapis.com/index.html

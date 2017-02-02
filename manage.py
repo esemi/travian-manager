@@ -98,6 +98,7 @@ class Manager(object):
 
     MAIN_PAGE = config.HOST + '/dorf1.php'
     VILLAGE_PAGE = config.HOST + '/dorf2.php'
+    TROOPS_OVERVIEW_PAGE = config.HOST + '/dorf3.php?s=5'
     HERO_PAGE = config.HOST + '/hero.php'
     REPORTS_PAGE = config.HOST + '/berichte.php'
     HERO_ADVENTURE_PAGE = config.HOST + '/hero.php?t=3'
@@ -138,6 +139,13 @@ class Manager(object):
 
             # анализируем деревню
             self._analyze()
+
+            # строим войска
+            if config.ENABLE_BUILD_TROOPS:
+                try:
+                    self._build_troops()
+                except Exception as e:
+                    logging.error('troop building process exception %s', e)
 
             # remove uninteresting reports
             if config.ENABLE_REMOVE_FARM_REPORTS:
@@ -457,6 +465,60 @@ class Manager(object):
         self.driver.find_element_by_class_name('rallyPointConfirm').click()
         custom_wait()
 
+    def _build_troops(self):
+        logging.info('troops build call')
+
+        for village, configs in config.AUTO_TROOP_BUILD.items():
+            for conf in configs:
+                logging.info('process %s %s', village, conf)
+
+                # check current count total
+                current_unit_total = self.__find_current_unit_count(conf['troop_id'], village)
+                logging.info('current unit count %d', current_unit_total)
+                if current_unit_total >= conf['troop_max']:
+                    continue
+
+                self.__select_village(village)
+                logging.info('select village %s', village)
+
+                # found building for troop type
+                unit_input_elem = None
+                try:
+                    self.driver.find_element_by_xpath('//div[@id="sidebarBoxActiveVillage"]//button[contains(@class, "barracksWhite")]').click()
+                    custom_wait()
+                    unit_input_elem = self.driver.find_element_by_xpath('//div[contains(@class, "trainUnits")]//input[@name="%s"]' % conf['troop_id'])
+                    logging.info('unit found in barracks')
+                except NoSuchElementException:
+                    try:
+                        self.driver.find_element_by_xpath(
+                            '//div[@id="sidebarBoxActiveVillage"]//button[contains(@class, "stableWhite")]').click()
+                        custom_wait()
+                        unit_input_elem = self.driver.find_element_by_xpath(
+                            '//div[contains(@class, "trainUnits")]//input[@name="%s"]' % conf['troop_id'])
+                        logging.info('unit found in stable')
+                    except NoSuchElementException:
+                        pass
+
+                if not unit_input_elem:
+                    logging.warning('unit build not found')
+                    continue
+
+                # check available for build
+                available_unit_elem = unit_input_elem.find_element_by_xpath('./following-sibling::a')
+                cnt = int(available_unit_elem.text)
+                logging.info('found available unit href %s %d', available_unit_elem.text, cnt)
+
+                # todo check current queue
+
+                # build with check village
+                if cnt > 0:
+                    task_value = min(cnt, conf['troop_max'] - current_unit_total, conf['troop_queue_max'])
+                    logging.info('send new troop build task %d', task_value)
+                    unit_input_elem.clear()
+                    unit_input_elem.send_keys(str(task_value))
+                    self.driver.find_element_by_xpath('//button[@type="submit" and contains(@class, "startTraining")]').click()
+                    send_desktop_notify('troop train %s %s %s' % (village, conf['troop_id'], task_value))
+
     def _send_army_to_farm(self):
         logging.info('send army to farm call')
         if not config.AUTO_FARM_LISTS:
@@ -599,9 +661,9 @@ class Manager(object):
                     continue
 
                 try:
-                    bid_link = next_bid_elem.find_element_by_xpath('.//td[@class="bid"]/a[contains(text(), "Bid")]')
+                    bid_link = next_bid_elem.find_element_by_xpath('.//td[@class="bid"]/a[contains(text(), "bid")]')
                 except NoSuchElementException:
-                    logging.info('not found bid link')
+                    logging.warning('not found bid link')
                     continue
                 bid_link.click()
 
@@ -637,6 +699,15 @@ class Manager(object):
         if reports_for_delete:
             self.driver.find_element_by_id('del').click()
             custom_wait()
+
+
+    def __find_current_unit_count(self, unit_id, village):
+        self.driver.get(self.TROOPS_OVERVIEW_PAGE)
+        return int(self.driver.find_element_by_xpath('//table[@id="troops"]'
+                                                     '//th[contains(@class, "vil")]'
+                                                     '/a[text()="%s"]'
+                                                     '/ancestor::tr//td[%s]' %
+                                                     (village, unit_id[1:])).text)
 
     def __goto_farmlist(self):
         if not self.FARM_LIST_PAGE:
@@ -903,6 +974,15 @@ class Manager(object):
                     custom_wait()
                 except Exception as e:
                     pass
+
+    def __select_village(self, name):
+        village_link = self.driver.find_element_by_xpath('//div[@id="sidebarBoxVillagelist"]//li//a'
+                                                  '/div[@class="name" and contains(text(), "%s")]'
+                                                  '/parent::a' % name)
+        village_link.click()
+        custom_wait()
+
+
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
