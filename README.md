@@ -33,15 +33,17 @@ https://chromedriver.storage.googleapis.com/index.html
 
 - оповещать на десктоп о своих действиях
 
+- строить войска
+
 
 ##### TODO
-- строим войска
 
 - cлать фермеров раз в день, если потери были невелики
 - слать дешёвых фермеров, если были потери
 - check summary population of player for select new farms
 - гонять героя на оазисы не в одиночку
 - ограничение на силу юнитов при выборе оазиса для террора
+- искать оазисы со слонами
 
 - remove reports from all pages
 - save cookie for next run

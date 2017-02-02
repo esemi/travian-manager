@@ -134,6 +134,7 @@ class Manager(object):
             return
 
         while True:
+            logging.info("\n")
             self.loop_number += 1
             self._sanitizing()
 
@@ -142,6 +143,7 @@ class Manager(object):
 
             # строим войска
             if config.ENABLE_BUILD_TROOPS:
+                logging.info("\n")
                 try:
                     self._build_troops()
                 except Exception as e:
@@ -149,6 +151,7 @@ class Manager(object):
 
             # remove uninteresting reports
             if config.ENABLE_REMOVE_FARM_REPORTS:
+                logging.info("\n")
                 try:
                     self._remove_uninteresting_reports()
                 except Exception as e:
@@ -156,6 +159,7 @@ class Manager(object):
 
             # проверяем вражеские налёты
             if config.ENABLE_ATTACK_NOTIFY:
+                logging.info("\n")
                 try:
                     self._notify_about_attack()
                 except Exception as e:
@@ -163,6 +167,7 @@ class Manager(object):
 
             # отправляем героя в приключения
             if config.ENABLE_ADVENTURES:
+                logging.info("\n")
                 try:
                     self._send_hero_to_adventures()
                 except Exception as e:
@@ -170,6 +175,7 @@ class Manager(object):
 
             # отправляем героя на прокачку в джунгли
             if config.ENABLE_HERO_TERROR:
+                logging.info("\n")
                 try:
                     self._send_hero_to_nature()
                 except Exception as e:
@@ -177,6 +183,7 @@ class Manager(object):
 
             # забираем награды за квесты
             if config.ENABLE_QUEST_COMPLETE:
+                logging.info("\n")
                 try:
                     self._quest_complete()
                 except Exception as e:
@@ -184,6 +191,7 @@ class Manager(object):
 
             # шлём пылесосы по фарм листам
             if config.ENABLE_SEND_FARMS:
+                logging.info("\n")
                 try:
                     self._send_army_to_farm()
                 except Exception as e:
@@ -191,6 +199,7 @@ class Manager(object):
 
             # торгуем (пока только покупаем)
             if config.ENABLE_TRADE:
+                logging.info("\n")
                 try:
                     self._trading()
                 except Exception as e:
@@ -199,6 +208,7 @@ class Manager(object):
             # обновляем фарм листы
             if config.ENABLE_CLEAR_FARMS and config.ENABLE_UPDATE_FARMS \
                     and not float(self.loop_number) % config.CLEAR_FARM_LIST_FACTOR:
+                logging.info("\n")
                 try:
                     self._clear_farm_lists()
                 except Exception as e:
@@ -206,6 +216,7 @@ class Manager(object):
 
             # обновляем фарм листы
             if config.ENABLE_UPDATE_FARMS and not float(self.loop_number) % config.UPDATE_FARM_LIST_FACTOR:
+                logging.info("\n")
                 try:
                     self._update_farm_lists()
                 except Exception as e:
@@ -476,7 +487,10 @@ class Manager(object):
                 current_unit_total = self.__find_current_unit_count(conf['troop_id'], village)
                 logging.info('current unit count %d', current_unit_total)
                 if current_unit_total >= conf['troop_max']:
+                    logging.info('total already max')
                     continue
+
+                need_train = conf['troop_max'] - current_unit_total
 
                 self.__select_village(village)
                 logging.info('select village %s', village)
@@ -485,14 +499,12 @@ class Manager(object):
                 unit_input_elem = None
                 try:
                     self.driver.find_element_by_xpath('//div[@id="sidebarBoxActiveVillage"]//button[contains(@class, "barracksWhite")]').click()
-                    custom_wait()
                     unit_input_elem = self.driver.find_element_by_xpath('//div[contains(@class, "trainUnits")]//input[@name="%s"]' % conf['troop_id'])
                     logging.info('unit found in barracks')
                 except NoSuchElementException:
                     try:
                         self.driver.find_element_by_xpath(
                             '//div[@id="sidebarBoxActiveVillage"]//button[contains(@class, "stableWhite")]').click()
-                        custom_wait()
                         unit_input_elem = self.driver.find_element_by_xpath(
                             '//div[contains(@class, "trainUnits")]//input[@name="%s"]' % conf['troop_id'])
                         logging.info('unit found in stable')
@@ -504,20 +516,36 @@ class Manager(object):
                     continue
 
                 # check available for build
-                available_unit_elem = unit_input_elem.find_element_by_xpath('./following-sibling::a')
-                cnt = int(available_unit_elem.text)
-                logging.info('found available unit href %s %d', available_unit_elem.text, cnt)
+                elem = unit_input_elem.find_element_by_xpath('./following-sibling::a')
+                available_unit_count = int(elem.text)
+                logging.info('found available unit count %d', available_unit_count)
+                if not available_unit_count:
+                    logging.info('not found available units')
+                    continue
 
-                # todo check current queue
+                # check current queue
+                unit_name = str(unit_input_elem.find_element_by_xpath('./preceding-sibling::div[contains(@class, "tit")]/a[2]').text)
+                logging.info('unit name is %s', unit_name)
+                queue_elems = self.driver.find_elements_by_xpath('//table[@class="under_progress"]//td[@class="desc" and contains(string(), "%s")]' % unit_name)
+                logging.debug('found %d current queue tasks', len(queue_elems))
+                already_queue_count = 0
+                for e in queue_elems:
+                    text = str(e.text).strip()
+                    cnt = int(re.findall(r'([0-9]+)', text, re.MULTILINE)[0])
+                    logging.debug("counting '%s' %d", text, cnt)
+                    already_queue_count += cnt
+                logging.info('found already queue task %d', already_queue_count)
+                if already_queue_count >= conf['troop_queue_max']:
+                    logging.info('queue is full')
+                    continue
 
                 # build with check village
-                if cnt > 0:
-                    task_value = min(cnt, conf['troop_max'] - current_unit_total, conf['troop_queue_max'])
-                    logging.info('send new troop build task %d', task_value)
-                    unit_input_elem.clear()
-                    unit_input_elem.send_keys(str(task_value))
-                    self.driver.find_element_by_xpath('//button[@type="submit" and contains(@class, "startTraining")]').click()
-                    send_desktop_notify('troop train %s %s %s' % (village, conf['troop_id'], task_value))
+                task_value = min(available_unit_count, need_train - already_queue_count, conf['troop_queue_max'] - already_queue_count)
+                logging.info('send new troop build task %d', task_value)
+                unit_input_elem.clear()
+                unit_input_elem.send_keys(str(task_value))
+                self.driver.find_element_by_xpath('//button[@type="submit" and contains(@class, "startTraining")]').click()
+                send_desktop_notify('troop train %s %s %s' % (village, conf['troop_id'], task_value))
 
     def _send_army_to_farm(self):
         logging.info('send army to farm call')
@@ -981,7 +1009,6 @@ class Manager(object):
                                                   '/parent::a' % name)
         village_link.click()
         custom_wait()
-
 
 
 if __name__ == '__main__':
