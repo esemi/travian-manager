@@ -15,6 +15,7 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.ui import Select
 
 import config
+import config_utils
 
 
 def custom_wait():
@@ -87,11 +88,22 @@ def extract_free_oases_from_source(source):
     return oases
 
 
-def extract_oases_enemies_from_source(source):
+def extract_oases_enemy_strength_from_source(source):
     map_dict = loads(source)
     document = l.fromstring(map_dict['response']['data']['html'].strip())
-    troop_rows = document.xpath('//table[@id="troop_info"]//td[@class="val"]/text()')
-    return sum([int(i.strip()) for i in troop_rows])
+    out = 0
+    for tr in document.xpath('//table[@id="troop_info"]//td[@class="val"]/parent::tr'):
+        count = int(tr.xpath('.//td[@class="val"]/text()')[0].strip())
+        name = tr.xpath('.//td[@class="desc"]/text()')[0].strip()
+        logging.info('oases analize %s %d', name, count)
+        try:
+            index = [i for i in config.NATURE_ENEMIES_STRENGTH if i in name][0]
+            strength = count * config.NATURE_ENEMIES_STRENGTH[index]
+            out += strength
+        except IndexError:
+            logging.warning('undefined nature troop %s', name)
+
+    return out
 
 
 class Manager(object):
@@ -364,7 +376,7 @@ class Manager(object):
             try:
                 attack_timer_elem = self.driver.find_element_by_xpath('//div[@id="map_details"]'
                                                                 '//div[contains(@class, "villageList")]'
-                                                                '//img[@class="att1"]'
+                                                                '//img[@class="att1" or @class="att3"]'
                                                                 '/ancestor::tr//span[@class="timer"]')
                 logging.info('find attack timer %s', attack_timer_elem.text)
                 attack_timing.append(int(attack_timer_elem.get_attribute('value')))
@@ -378,7 +390,7 @@ class Manager(object):
         if attack_timing:
             send_desktop_notify('found %d attacks (%s)' % (len(attack_timing), min(attack_timing)))
             if min(attack_timing) <= config.LOOP_TIMEOUT * 4.:
-                config.send_attack_notify('t-manager: found %d attacks (min time %d)' %
+                config_utils.send_attack_notify('t-manager: found %d attacks (min time %d)' %
                                           (len(attack_timing), min(attack_timing)))
 
     def _send_hero_to_adventures(self):
@@ -440,16 +452,15 @@ class Manager(object):
         oases = extract_free_oases_from_source(source)
         logging.info('found %d free oases', len(oases))
 
-        # select first not empty oasis
+        # select oasis
         random.shuffle(oases)
-        logging.info('minimum enemies is %s', config.HERO_TERROR_MIN_ENEMIES)
         selected_coords = None
         for i in oases:
             logging.info('oases %s check', i)
             tile_info_source = self.__get_tile_info(*i)
-            count = extract_oases_enemies_from_source(tile_info_source)
-            logging.info('enemies %d', count)
-            if count >= config.HERO_TERROR_MIN_ENEMIES:
+            strength = extract_oases_enemy_strength_from_source(tile_info_source)
+            logging.info('enemy strength %d', strength)
+            if config.HERO_TERROR_MIN_ENEMIES_STRENGTH <= strength <= config.HERO_TERROR_MAX_ENEMIES_STRENGTH:
                 selected_coords = i
                 break
 
@@ -468,6 +479,13 @@ class Manager(object):
         form_elem.find_element_by_xpath('.//input[@name="t11"]').send_keys(1)
         form_elem.find_element_by_id('xCoordInput').send_keys(selected_coords[0])
         form_elem.find_element_by_id('yCoordInput').send_keys(selected_coords[1])
+        if config.HERO_TERROR_ESCORT_COUNT:
+            logging.info('add escort for hero %s %s',
+                         config.HERO_TERROR_ESCORT_COUNT,
+                         config.HERO_TERROR_ESCORT_UNIT)
+            form_elem.find_element_by_xpath('.//input[@name="%s"]' % config.HERO_TERROR_ESCORT_UNIT)\
+                .send_keys(config.HERO_TERROR_ESCORT_COUNT)
+
         form_elem.find_element_by_xpath('.//div[@class="option"]//input[@value="4"]').click()
         form_elem.submit()
         custom_wait()

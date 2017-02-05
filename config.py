@@ -11,32 +11,26 @@ LOOP_TIMEOUT = 10 * 60  # fact loop timeout maybe from LOOP_TIMEOUT to LOOP_TIME
 CREDS = ('login', 'pass')
 HOST = 'http://ts1.travian.com'
 
-RESOURCE_WOOD = 1
-RESOURCE_FOOD = 2
-RESOURCE_IRON = 3
-RESOURCE_CLAY = 4
-RESOURCE_FOOD_FREE = 5
-
-RESOURCE_CLAY_NAME = 'Clay'
-RESOURCE_WOOD_NAME = 'Lumber'
-RESOURCE_FOOD_NAME = 'Crop'
-RESOURCE_IRON_NAME = 'Iron'
-
-RESOURCE_WOOD_MINE = 'Woodcutter'
-RESOURCE_IRON_MINE = 'Iron Mine'
-RESOURCE_FOOD_MINE = 'Cropland'
-RESOURCE_CLAY_MINE = 'Clay Pit'
-
-RESOURCE_BUILD_PATTERN_LEVEL = 'Level'
-
-BUILD_QUEUE_SLOTS_LIMIT = 2
+HERO_HP_THRESHOLD_FOR_ADVENTURE = 60
 
 HERO_ON_HOME_PATTERN = 'Hero is currently in village'
-
-HERO_HP_THRESHOLD_FOR_ADVENTURE = 65
-HERO_HP_THRESHOLD_FOR_TERROR = 85
-HERO_TERROR_MIN_ENEMIES = 10
-HERO_TERROR_ESCORT = {'unit': 't2', 'count': 150}
+HERO_HP_THRESHOLD_FOR_TERROR = 80
+HERO_TERROR_MIN_ENEMIES_STRENGTH = 45 * 20
+HERO_TERROR_MAX_ENEMIES_STRENGTH = 45 * 150
+HERO_TERROR_ESCORT_UNIT = 't2'
+HERO_TERROR_ESCORT_COUNT = 300
+NATURE_ENEMIES_STRENGTH = {
+    'Rat': 45,
+    'Spider': 75,
+    'Snake': 100,
+    'Bat': 116,
+    'Wild Boars': 103,
+    'Wolf': 150, 'Wolves': 150,
+    'Bear': 340,
+    'Crocodile': 620,
+    'Tiger': 420,
+    'Elephant': 960
+}
 
 FARM_LIST_SEND_BUTTON_PATTERN = 'start raid'
 FARM_LIST_ADD_BUTTON_PATTERN = 'add'
@@ -100,16 +94,12 @@ ENABLE_ATTACK_NOTIFY = True
 ENABLE_REMOVE_FARM_REPORTS = True
 ENABLE_BUILD_TROOPS = True
 
-DEBUG = True
+DEBUG = False
 
 
 SMS_TO_PHONE = '+3123456789'
 SMS_USER = 'smsc username'
 SMS_PASS = 'smsc login'
-
-
-def send_attack_notify(message):
-    pass
 
 
 try:
