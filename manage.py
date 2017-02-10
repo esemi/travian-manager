@@ -227,7 +227,8 @@ class Manager(object):
                     logging.error('farm clear process exception %s', e)
 
             # обновляем фарм листы
-            if config.ENABLE_UPDATE_FARMS and not float(self.loop_number) % config.UPDATE_FARM_LIST_FACTOR:
+            if config.ENABLE_UPDATE_FARMS and \
+                    (not float(self.loop_number) % config.UPDATE_FARM_LIST_FACTOR or self.loop_number == 1):
                 logging.info("\n")
                 try:
                     self._update_farm_lists()
