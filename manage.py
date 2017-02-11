@@ -386,7 +386,6 @@ class Manager(object):
                 continue
 
         logging.info('found %d attack timings', len(attack_timing))
-        logging.info(attack_timing)
 
         if attack_timing:
             send_desktop_notify('found %d attacks (%s)' % (len(attack_timing), min(attack_timing)))
@@ -822,9 +821,9 @@ class Manager(object):
     def __search_farmlist_id_by_title(self, title_pattern):
         farm_lists = self.driver.find_elements_by_xpath('//div[@id="raidList"]/div[contains(@class, "listEntry")]')
         for list_element in farm_lists:
-            title = list_element.find_element_by_class_name('listTitleText').text
+            title = str(list_element.find_element_by_class_name('listTitleText').text).strip()
             logging.debug('search farm list %s', title)
-            if title_pattern in title:
+            if title_pattern == title:
                 return list_element.get_attribute('id')
         return None
 
