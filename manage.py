@@ -3,6 +3,7 @@
 
 import logging
 import time
+import datetime
 from json import loads
 import os
 import random
@@ -114,6 +115,21 @@ def check_green_losses_farm(source):
     return config.FARM_LIST_ATTACK_PATTERN1 in source
 
 
+def check_recently_attacked_farm(source, current_timestamp):
+    if not current_timestamp:
+        return False
+
+    res = re.findall(config.REPORTS_TIME_PATTERN, source, re.MULTILINE)
+    if not res:
+        return False
+
+    hour, minute = res[0]
+    server_time = datetime.datetime.utcfromtimestamp(current_timestamp)
+    attack_time = server_time.replace(hour=int(hour), minute=int(minute))
+    delta = server_time - attack_time
+    return int(delta.total_seconds()) <= config.SEND_FARMS_MIN_INTERVAL
+
+
 def check_orange_losses_farm(source):
     return config.FARM_LIST_ATTACK_PATTERN2 in source
 
@@ -144,27 +160,24 @@ class Manager(object):
     loop_number = 0
     is_logged = False
     hero_hp = 0
+    current_timestamp = 0
     ajax_token = ''
 
     def __init__(self, user, passwd):
-        self.user = user
-        self.passwd = passwd
-
         os.environ["webdriver.chrome.driver"] = config.CHROME_DRIVER_PATH
         self.driver = webdriver.Chrome(executable_path=config.CHROME_DRIVER_PATH)
         self.driver.set_page_load_timeout(config.REQUEST_TIMEOUT)
         self.driver.implicitly_wait(config.FIND_TIMEOUT)
+
+        self._login(user, passwd)
+        if not self.is_logged:
+            raise RuntimeError('login error')
 
     def close(self):
         if self.driver:
             self.driver.quit()
 
     def run(self):
-        self._login()
-        if not self.is_logged:
-            logging.error('login error')
-            return
-
         while True:
             logging.info("\n")
             self.loop_number += 1
@@ -228,14 +241,6 @@ class Manager(object):
                     self._send_army_to_farm()
                 except Exception as e:
                     logging.error('farm send process exception %s', e)
-
-            # шлём пылесосы по опасным фарм листам (оранжевые)
-            if config.ENABLE_SEND_FARMS_CANNON_FODDER:
-                logging.info("\n")
-                try:
-                    self._send_army_to_farm_orange()
-                except Exception as e:
-                    logging.error('orange farm send process exception %s', e)
 
             # торгуем (пока только покупаем)
             if config.ENABLE_TRADE:
@@ -344,13 +349,13 @@ class Manager(object):
             except NoSuchElementException:
                 logging.info('not found daily reward')
 
-    def _login(self):
+    def _login(self, user, passw):
         logging.info('login call')
         try:
             self.driver.get(config.HOST)
             login_form = self.driver.find_element_by_name("login")
-            login_form.find_element_by_name('name').send_keys(self.user)
-            login_form.find_element_by_name('password').send_keys(self.passwd)
+            login_form.find_element_by_name('name').send_keys(user)
+            login_form.find_element_by_name('password').send_keys(passw)
             login_form.submit()
 
             self.driver.find_element_by_id('village_map')
@@ -372,9 +377,8 @@ class Manager(object):
         
     def _analyze(self):
         logging.info('analyze call')
-
-        # analyze hero
         self._analyze_hero()
+        self._analyze_time()
 
     def _analyze_hero(self):
         try:
@@ -388,6 +392,15 @@ class Manager(object):
         except:
             logging.warning('hero analyze error')
             self.hero_hp = 0
+
+    def _analyze_time(self):
+        try:
+            self.current_timestamp = int(self.driver.find_element_by_id('servertime')
+                                         .find_element_by_xpath('.//span[@class="timer"]').get_attribute('value'))
+            logging.info('current time is %d', self.current_timestamp)
+        except:
+            logging.warning('time analyze error')
+            self.current_timestamp = 0
 
     def _notify_about_attack(self):
         logging.info('notify about attack call')
@@ -588,32 +601,55 @@ class Manager(object):
 
     def _send_army_to_farm(self):
         logging.info('send army to farm call')
-        if not config.AUTO_FARM_LISTS:
+        patterns = config.AUTO_FARM_LISTS
+        # random.shuffle(patterns)
+        if not patterns:
             logging.info('not found farm list for automate')
             return
 
-        res = self.__goto_farmlist()
-        if not res:
-            return
-
-        patterns = config.AUTO_FARM_LISTS
-        random.shuffle(patterns)
-
-        # send to carry full villages
-        for title in patterns:
-            logging.info('process farm list carry full %s', title)
-            try:
-                self.__send_farm(title, True)
-            except Exception as e:
-                logging.error('send farms exception %s', e)
-
-        # send to all
         for title in patterns:
             logging.info('process farm list %s', title)
-            try:
-                self.__send_farm(title)
-            except Exception as e:
-                logging.error('send farms exception %s', e)
+
+            self.__goto_farmlist()
+            id = self.__search_farmlist_id_by_title(title)
+            if not id:
+                logging.warning('not found list')
+                continue
+
+            # todo check available troops for green slots
+            # todo check available troops for orange slots
+
+            slots = self.__get_all_slots_by_farm_list(id)
+            enemies = []
+            for tr in slots:
+                raw_content = tr.get_attribute('innerHTML')
+                if not check_already_attacked_farm(raw_content):
+                    red_for_me = check_red_losses_farm(raw_content)
+                    id = tr.find_element_by_xpath('.//input[@type="checkbox"]').get_attribute('id')
+                    link = tr.find_element_by_xpath('.//td[@class="village"]/a').get_attribute('href')
+                    enemies.append({'id': id, 'link': link, 'is_red': red_for_me})
+            logging.info('found %d slots - filtered to %d', len(slots), len(enemies))
+            if not enemies:
+                continue
+
+            # sorting by last report
+            green_full, green_other, orange_full, orange_other = self.__filter_farms_by_last_report(enemies)
+            logging.info('sorting to %d green full, %d green other, %d orange full, %d orange other', len(green_full),
+                         len(green_other), len(orange_full), len(orange_other))
+
+            # sort list by distance
+            # send to green_full
+
+            # sort list by lastRaid
+            # send to green_other
+
+            # for slot in orange_full + orange_other
+            #     try:
+            #         # send to orange_full
+            #         # send to orange_other
+            #         pass
+            #     except Exception as e:
+            #         logging.error('send farm to orange slot exception %s', e)
 
     def _clear_farm_lists(self):
         logging.info('process clear farm list')
@@ -767,58 +803,6 @@ class Manager(object):
             self.driver.find_element_by_id('del').click()
             custom_wait()
 
-    def _send_army_to_farm_orange(self):
-        logging.info('send cannon fodder farms start')
-        list_titles = config.AUTO_FARM_LISTS
-
-        for title in list_titles:
-            logging.info('process farm list %s', title)
-
-            self.__goto_farmlist()
-            id = self.__search_farmlist_id_by_title(title)
-            if not id:
-                logging.warning('not found list')
-                continue
-
-            # sort slots
-            danger_farms = self.__extract_danger_farms(id)
-            logging.info('found %d danger farms', len(danger_farms))
-            logging.debug(danger_farms)
-            if not danger_farms:
-                continue
-
-            # sorting by last report
-            green_ids, orange_ids, full_carry_ids, today_ids = self.__extract_casualties(danger_farms)
-            logging.info('filter to %d green, %d orange, %d full carry and %d today farmed', len(green_ids),
-                         len(orange_ids), len(full_carry_ids), len(today_ids))
-
-            self.__goto_farmlist()
-            id = self.__search_farmlist_by_id(id)
-            if not id:
-                logging.warning('not found list')
-                continue
-
-            # send normal bands to green with full carry
-            green_full = list(set(green_ids) & set(full_carry_ids))
-            if green_full:
-                logging.info('send army to %d green full', len(green_full))
-                try:
-                    self.__send_farm(title, True, green_full)
-                except Exception as e:
-                    logging.error('send farms exception %s', e)
-
-            # send normal bands to other green
-            green_other = list(set(green_ids) - set(green_full))
-            if green_other:
-                logging.info('send army to %d other green', len(green_other))
-                try:
-                    self.__send_farm(title, False, green_other)
-                except Exception as e:
-                    logging.error('send farms exception %s', e)
-
-            # todo send cannon rubber bands to orange with full carry
-            # todo send cannon rubber bands to other orange if last raid not today
-
     def __extract_summary_casualties(self):
         total = 0
         casualties = 0
@@ -838,15 +822,13 @@ class Manager(object):
 
         return total, casualties
 
-    def __extract_casualties(self, farms):
-        green_ids = []
-        orange_ids = []
-        full_carry_ids = []
-        today_ids = []
-        for v in farms:
-            logging.info('check casualties %s village', v)
+    def __filter_farms_by_last_report(self, farms):
+        green_full, green_other, orange_full, orange_other = [], [], [], []
+        for i, v in enumerate(farms):
+            id = v['id']
+            logging.info('check last report %s %s', i, id)
             self.driver.get(v['link'])
-
+            last_attack_report = None
             try:
                 last_attack_report = self.driver.find_element_by_xpath('//table[@id="troop_info"]'
                                                                        '//td/img[contains(@class, "iReport")]'
@@ -856,40 +838,54 @@ class Manager(object):
                                                                           config.FARM_LIST_ATTACK_PATTERN2,
                                                                           config.FARM_LIST_ATTACK_PATTERN3))
             except NoSuchElementException:
-                green_ids.append(v['id'])
                 logging.info('not found last attack report')
+
+            if not last_attack_report:
+                if not v['is_red']:
+                    logging.info('mark as green other by not found last report')
+                    green_other.append(id)
                 continue
 
             source = last_attack_report.get_attribute('innerHTML')
-            if config.REPORTS_TODAY_PATTERN in source:
-                today_ids.append(v['id'])
-                logging.info('mark report as today')
+            is_full_carry = check_full_carry_farm(source)
+            is_green = check_green_losses_farm(source)
+            is_orange = check_orange_losses_farm(source)
+            is_today = config.REPORTS_TODAY_PATTERN in source
+            is_recently_attacked = check_recently_attacked_farm(source, self.current_timestamp)
 
-            if check_full_carry_farm(source):
-                full_carry_ids.append(v['id'])
-                logging.info('mark report as carry full')
+            if is_green and is_full_carry:
+                logging.info('mark as green full')
+                green_full.append(id)
+                continue
 
-            if check_green_losses_farm(source):
-                green_ids.append(v['id'])
-                logging.info('mark as green village')
+            if is_orange and is_full_carry:
+                logging.info('mark as orange full')
+                orange_full.append(id)
+                continue
 
-            if check_orange_losses_farm(source):
-                try:
-                    link = last_attack_report.find_element_by_tag_name('a').get_attribute('href')
-                    logging.debug('report link %s', link)
-                    self.driver.get(link)
-                except NoSuchElementException:
-                    logging.warning('not found report link')
-                    continue
+            if is_green and not is_recently_attacked:
+                logging.info('mark as green other by not recently attacked')
+                green_other.append(id)
+                continue
 
-                total, casualties = self.__extract_summary_casualties()
-                if casualties > config.SEND_FARMS_CANNON_FODDER_MAX_CASUALTIES or total == casualties:
-                    logging.info('casualties too large for farming')
-                    continue
-                orange_ids.append(v['id'])
-                logging.info('mark as orange village')
+            if is_orange and not is_today:
+                logging.info('mark as orange other by not today')
+                orange_other.append(id)
+                continue
 
-        return green_ids, orange_ids, full_carry_ids, today_ids
+            logging.info('pass')
+
+            # if is_orange :
+            #     try:
+            #         link = last_attack_report.find_element_by_tag_name('a').get_attribute('href')
+            #         logging.debug('report link %s', link)
+            #         self.driver.get(link)
+            #     except NoSuchElementException:
+            #         logging.warning('not found report link')
+            #         continue
+            #     total, casualties = self.__extract_summary_casualties()
+
+        return green_full, green_other, orange_full, orange_other
 
     def __find_troop_train_building(self, troop_id):
 
@@ -924,21 +920,6 @@ class Manager(object):
             pass
 
         return None
-
-    def __extract_danger_farms(self, farm_list_id):
-        slots = self.__get_all_slots_by_farm_list(farm_list_id)
-        out = []
-        for tr in slots:
-            raw_content = tr.get_attribute('innerHTML')
-            if check_already_attacked_farm(raw_content):
-                continue
-            if not check_orange_losses_farm(raw_content) and not check_red_losses_farm(raw_content):
-                continue
-
-            id = tr.find_element_by_xpath('.//input[@type="checkbox"]').get_attribute('id')
-            link = tr.find_element_by_xpath('.//td[@class="village"]/a').get_attribute('href')
-            out.append({'id': id, 'link': link})
-        return out
 
     def __find_current_unit_count(self, unit_id, village):
         self.driver.get(self.TROOPS_OVERVIEW_PAGE)
@@ -1169,9 +1150,8 @@ class Manager(object):
         custom_wait()
 
         logging.info('select villages')
-        slots = self.__get_all_slots_by_farm_list(id)
         selected = False
-        for tr in slots:
+        for tr in self.__get_all_slots_by_farm_list(id):
             raw_content = tr.get_attribute('innerHTML')
 
             # ignore if currently attacked
@@ -1247,5 +1227,3 @@ if __name__ == '__main__':
     finally:
         if not config.DEBUG:
             m.close()
-
-
