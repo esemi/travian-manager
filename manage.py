@@ -822,7 +822,7 @@ class Manager(object):
         farm_lists = self.driver.find_elements_by_xpath('//div[@id="raidList"]/div[contains(@class, "listEntry")]')
         for list_element in farm_lists:
             title = str(list_element.find_element_by_class_name('listTitleText').text).strip()
-            logging.debug('search farm list %s', title)
+            logging.info('search farm list %s', title)
             if title_pattern == title:
                 return list_element.get_attribute('id')
         return None
