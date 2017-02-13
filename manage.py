@@ -602,24 +602,24 @@ class Manager(object):
     def _send_army_to_farm(self):
         logging.info('send army to farm call')
         patterns = config.AUTO_FARM_LISTS
-        # random.shuffle(patterns)
         if not patterns:
             logging.info('not found farm list for automate')
             return
 
+        random.shuffle(patterns)
         for title in patterns:
             logging.info('process farm list %s', title)
 
             self.__goto_farmlist()
-            id = self.__search_farmlist_id_by_title(title)
-            if not id:
+            farm_list_id = self.__search_farmlist_id_by_title(title)
+            if not farm_list_id:
                 logging.warning('not found list')
                 continue
 
             # todo check available troops for green slots
             # todo check available troops for orange slots
 
-            slots = self.__get_all_slots_by_farm_list(id)
+            slots = self.__get_all_slots_by_farm_list(farm_list_id)
             enemies = []
             for tr in slots:
                 raw_content = tr.get_attribute('innerHTML')
@@ -634,14 +634,18 @@ class Manager(object):
 
             # sorting by last report
             green_full, green_other, orange_full, orange_other = self.__filter_farms_by_last_report(enemies)
-            logging.info('sorting to %d green full, %d green other, %d orange full, %d orange other', len(green_full),
-                         len(green_other), len(orange_full), len(orange_other))
+            logging.info('sorting to %d green full, %d green other, %d orange full, %d orange other',
+                         len(green_full), len(green_other), len(orange_full), len(orange_other))
 
-            # sort list by distance
             # send to green_full
+            if green_full:
+                logging.info('try send %d green full', len(green_full))
+                self.__send_farm(farm_list_id, green_full, sort_by_distance=True)
 
-            # sort list by lastRaid
             # send to green_other
+            if green_other:
+                logging.info('try send %d green other', len(green_other))
+                self.__send_farm(farm_list_id, green_other, sort_by_lastraid=True)
 
             # for slot in orange_full + orange_other
             #     try:
@@ -873,8 +877,7 @@ class Manager(object):
                 orange_other.append(id)
                 continue
 
-            logging.info('pass')
-
+            logging.info('skip farm slot')
             # if is_orange :
             #     try:
             #         link = last_attack_report.find_element_by_tag_name('a').get_attribute('href')
@@ -1124,13 +1127,9 @@ class Manager(object):
         form.find_element_by_id('save').click()
         custom_wait()
 
-    def __send_farm(self, title, carry_full_only=False, force_slot_ids=None):
-        id = self.__search_farmlist_id_by_title(title)
-        if not id:
-            logging.warning('not found list')
-            return
-
-        if carry_full_only:
+    def __send_farm(self, id, slot_ids, sort_by_distance=False, sort_by_lastraid=False):
+        self.__goto_farmlist()
+        if sort_by_distance:
             logging.info('sort list by distance')
             sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
                 './/td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
@@ -1138,7 +1137,10 @@ class Manager(object):
             custom_wait()
             sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
                 './/td[contains(@class, "distance") and contains(@class, "sortable")]')
-        else:
+            sort_column.click()
+            custom_wait()
+
+        if sort_by_lastraid:
             logging.info('sort list by last raid')
             sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
                 './/td[contains(@class, "distance") and contains(@class, "sortable")]')
@@ -1146,10 +1148,9 @@ class Manager(object):
             custom_wait()
             sort_column = self.__search_farmlist_by_id(id).find_element_by_xpath(
                 './/td[contains(@class, "lastRaid") and contains(@class, "sortable")]')
-        sort_column.click()
-        custom_wait()
+            sort_column.click()
+            custom_wait()
 
-        logging.info('select villages')
         selected = False
         for tr in self.__get_all_slots_by_farm_list(id):
             raw_content = tr.get_attribute('innerHTML')
@@ -1158,21 +1159,10 @@ class Manager(object):
             if check_already_attacked_farm(raw_content):
                 continue
 
-            if not force_slot_ids:
-                # ignore if last raid was loses
-                if check_orange_losses_farm(raw_content) or check_red_losses_farm(raw_content):
-                    continue
-
-                # ignore if last raid was not full cary
-                if carry_full_only and not check_full_carry_farm(raw_content):
-                    continue
-
             checkbox_elem = tr.find_element_by_xpath('.//input[@type="checkbox"]')
-            if force_slot_ids and checkbox_elem.get_attribute('id') not in force_slot_ids:
-                continue
-
-            checkbox_elem.click()
-            selected = True
+            if checkbox_elem.get_attribute('id') in slot_ids:
+                checkbox_elem.click()
+                selected = True
 
         if not selected:
             logging.info('not selected raids')
