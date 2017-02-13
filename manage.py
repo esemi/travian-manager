@@ -234,14 +234,6 @@ class Manager(object):
                 except Exception as e:
                     logging.error('quests process exception %s', e)
 
-            # шлём пылесосы по фарм листам
-            if config.ENABLE_SEND_FARMS:
-                logging.info("\n")
-                try:
-                    self._send_army_to_farm()
-                except Exception as e:
-                    logging.error('farm send process exception %s', e)
-
             # торгуем (пока только покупаем)
             if config.ENABLE_TRADE:
                 logging.info("\n")
@@ -249,6 +241,14 @@ class Manager(object):
                     self._trading()
                 except Exception as e:
                     logging.error('trade process exception %s', e)
+
+            # шлём пылесосы по фарм листам
+            if config.ENABLE_SEND_FARMS and (not float(self.loop_number) % config.SEND_FARMS_FACTOR or self.loop_number == 1):
+                logging.info("\n")
+                try:
+                    self._send_army_to_farm()
+                except Exception as e:
+                    logging.error('farm send process exception %s', e)
 
             # обновляем фарм листы
             if config.ENABLE_CLEAR_FARMS and config.ENABLE_UPDATE_FARMS \
@@ -260,8 +260,7 @@ class Manager(object):
                     logging.error('farm clear process exception %s', e)
 
             # обновляем фарм листы
-            if config.ENABLE_UPDATE_FARMS and \
-                    (not float(self.loop_number) % config.UPDATE_FARM_LIST_FACTOR or self.loop_number == 1):
+            if config.ENABLE_UPDATE_FARMS and not float(self.loop_number) % config.UPDATE_FARM_LIST_FACTOR:
                 logging.info("\n")
                 try:
                     self._update_farm_lists()
@@ -632,28 +631,35 @@ class Manager(object):
             if not enemies:
                 continue
 
-            # sorting by last report
             green_full, green_other, orange_full, orange_other = self.__filter_farms_by_last_report(enemies)
             logging.info('sorting to %d green full, %d green other, %d orange full, %d orange other',
                          len(green_full), len(green_other), len(orange_full), len(orange_other))
 
-            # send to green_full
             if green_full:
                 logging.info('try send %d green full', len(green_full))
                 self.__send_farm(farm_list_id, green_full, sort_by_distance=True)
 
-            # send to green_other
             if green_other:
                 logging.info('try send %d green other', len(green_other))
                 self.__send_farm(farm_list_id, green_other, sort_by_lastraid=True)
 
-            # for slot in orange_full + orange_other
-            #     try:
-            #         # send to orange_full
-            #         # send to orange_other
-            #         pass
-            #     except Exception as e:
-            #         logging.error('send farm to orange slot exception %s', e)
+            if config.ENABLE_SEND_CANNON_RUBBER_FARMS:
+                if orange_full:
+                    logging.info('try send %d orange full', len(orange_full))
+                    for slot in enemies:
+                        if slot['id'] not in orange_full:
+                            continue
+                        res = self.__send_orange_farm(slot['link'])
+                        if res is False:
+                            break
+                if orange_other:
+                    logging.info('try send %d orange other', len(orange_other))
+                    for slot in enemies:
+                        if slot['id'] not in orange_other:
+                            continue
+                        res = self.__send_orange_farm(slot['link'])
+                        if res is False:
+                            break
 
     def _clear_farm_lists(self):
         logging.info('process clear farm list')
@@ -1126,6 +1132,42 @@ class Manager(object):
 
         form.find_element_by_id('save').click()
         custom_wait()
+
+    def __send_orange_farm(self, link):
+        logging.info('send to %s', link)
+        self.driver.get(link)
+        try:
+            self.driver.find_element_by_partial_link_text(config.SEND_TROOPS_BUTTON_PATTERN).click()
+        except NoSuchElementException:
+            logging.warning('not found send troop button')
+            return
+
+        logging.info('select village %s', config.SEND_FARMS_CANNON_FODDER_VILLAGE)
+        self.__select_village(config.SEND_FARMS_CANNON_FODDER_VILLAGE)
+
+        # check count troops
+        try:
+            unit_input_elem = self.driver.find_element_by_xpath(
+                '//table[@id="troops"]//input[@name="%s"]' % config.SEND_FARMS_CANNON_FODDER_UNIT)
+            elem = unit_input_elem.find_element_by_xpath('./following-sibling::a')
+            available_unit_count = int(elem.text)
+            logging.info('found available troops count %d', available_unit_count)
+            if available_unit_count < config.SEND_FARMS_CANNON_FODDER_COUNT:
+                logging.warning('not enough troops')
+                return False
+        except NoSuchElementException:
+            logging.warning('not found available troops elem')
+            return False
+
+        # send army
+        unit_input_elem.clear()
+        unit_input_elem.send_keys(str(config.SEND_FARMS_CANNON_FODDER_COUNT))
+        self.driver.find_element_by_xpath('//input[@type="radio" and @value="4"]').click()
+        self.driver.find_element_by_xpath('//button[@type="submit" and @id="btn_ok"]').click()
+        self.driver.find_element_by_class_name('rallyPointConfirm').click()
+        logging.info('send cannon rubber farm band')
+        send_desktop_notify('send cannon rubber farm band')
+        return True
 
     def __send_farm(self, id, slot_ids, sort_by_distance=False, sort_by_lastraid=False):
         self.__goto_farmlist()
