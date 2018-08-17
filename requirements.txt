@@ -1,3 +1,3 @@
-selenium
-lxml
-requests
+selenium==3.14.0
+lxml==4.2.4
+requests==2.19.1
