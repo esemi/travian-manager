@@ -1,6 +1,11 @@
 Travian manager
 ---
 
+[![Updates](https://pyup.io/repos/github/esemi/travian-manager/shield.svg)](https://pyup.io/repos/github/esemi/travian-manager/)
+[![Python 3](https://pyup.io/repos/github/esemi/travian-manager/python-3-shield.svg)](https://pyup.io/repos/github/esemi/travian-manager/)
+
+
+
 Электронный заместитель в игре Travian
 
 Разрабатывался и тестировался на .com сервере версии 4.*
