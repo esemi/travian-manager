@@ -1,6 +1,8 @@
 Travian manager bot
 ---
 Электронный заместитель в игре [Travian](https://www.travian.com/international)
+![image](https://user-images.githubusercontent.com/4115497/132899896-a617237e-7618-470f-9bd0-900dedf37d02.png)
+
 
 Тестировался на .com сервере версии 4.* в связке с Chrome [драйвером](https://chromedriver.storage.googleapis.com/index.html). 
 Для некоторых функций нужен плюс и золотой клуб.
