@@ -1,24 +1,14 @@
-Travian manager
+Travian manager bot
 ---
+Электронный заместитель в игре [Travian](https://www.travian.com/international)
 
-[![Updates](https://pyup.io/repos/github/esemi/travian-manager/shield.svg)](https://pyup.io/repos/github/esemi/travian-manager/)
-[![Python 3](https://pyup.io/repos/github/esemi/travian-manager/python-3-shield.svg)](https://pyup.io/repos/github/esemi/travian-manager/)
+Тестировался на .com сервере версии 4.* в связке с Chrome [драйвером](https://chromedriver.storage.googleapis.com/index.html). 
 
-
-
-Электронный заместитель в игре Travian
-
-Разрабатывался и тестировался на .com сервере версии 4.*
-
-Для некоторых функций нужен плюс и золотой клуб
-
-Use google chrome driver for selenium
-
-https://chromedriver.storage.googleapis.com/index.html
+Для некоторых функций нужен плюс и золотой клуб.
 
 
-##### Умеет:
-- комплитить квесты
+### Что умеет бот
+- завершать квесты
 
 - отправлять героя в приключения
 
@@ -41,24 +31,13 @@ https://chromedriver.storage.googleapis.com/index.html
 - строить войска
 
 
-##### TODO
+### Что можно добавить
 - cлать фермеров раз в день, если потери были невелики
-
 - оазисы как отдельный фарм лист
 - слать дешёвых фермеров, если были потери
 - апдейт с очисткой фарм листа по времени с последнего апдейта
 - искать оазисы со слонами
-
 - оазисы как отдельный фарм лист
-- check summary population of player for select new farms
+- проверять население всех деревень игрока при добавлении его в фарм лист
 - ограничение на силу юнитов при выборе оазиса для террора
-
-
-- remove reports from all pages
-- save cookie for next run
 - загонять ресы в войска с обменом, если до напа осталось меньше часа или ресы уже не влезают в склады
-
-
-- add template for local config
-- separate action log
-- screenshots for exceptions
